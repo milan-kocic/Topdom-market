@@ -1,19 +1,37 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, Package, Truck, CheckCircle, XCircle, Download } from 'lucide-react';
+import {
+  Search,
+  Package,
+  Clock,
+  User,
+  DollarSign,
+  Download
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { exportToCSV } from '@/lib/utils/csv-export';
 import toast from 'react-hot-toast';
+import { exportToCSV } from '@/lib/utils/csv-export';
 import type { Database } from '@/lib/types/database.types';
 
-type Order = Database['public']['Tables']['porudzbine']['Row'];
+type Order = {
+  id: string;
+  id_kupca: string;
+  status_porudzbine: string;
+  cena_ukupno: number;
+  kreirano: string;
+  kupci?: {
+    id: string;
+    ime_kupca: string;
+    prezime_kupca: string;
+    email: string;
+  };
+};
 
 export default function OrdersTab() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
     fetchOrders();
@@ -21,66 +39,104 @@ export default function OrdersTab() {
 
   async function fetchOrders() {
     try {
-      setLoading(true);
       const { data, error } = await supabase
         .from('porudzbine')
-        .select('*')
+        .select(
+          `
+          *,
+          kupci (
+            id,
+            ime_kupca,
+            prezime_kupca,
+            email
+          )
+        `
+        )
         .order('kreirano', { ascending: false });
 
-      if (error) throw error;
-      setOrders(data || []);
+      if (error) {
+        console.error(
+          'Supabase error:',
+          error.message,
+          error.details,
+          error.hint
+        );
+        throw error;
+      }
+
+      console.log('Fetched orders:', data);
+      setOrders(
+        (data || []).map((order) => ({
+          ...order,
+          status: order.status_porudzbine,
+          ukupan_iznos: order.cena_ukupno,
+          created_at: order.kreirano,
+          kupci: order.kupci
+            ? {
+                ime: order.kupci.ime_kupca,
+                prezime: order.kupci.prezime_kupca,
+                email: order.kupci.email
+              }
+            : undefined
+        }))
+      );
     } catch (error) {
-      console.error('Error fetching orders:', error);
-      toast.error('Greška pri učitavanju porudžbina');
+      const err = error as any;
+      console.error('Error fetching orders:', {
+        message: err?.message,
+        details: err?.details,
+        hint: err?.hint
+      });
+      toast.error('Greška pri učitavanju porudžbina. Molimo pokušajte ponovo.');
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleExportCSV() {
+  async function handleStatusChange(orderId: string, newStatus: string) {
     try {
-      const formattedData = orders.map(order => ({
-        ID: order.id,
-        'Ime kupca': order.kupac_ime,
-        'Prezime kupca': order.kupac_prezime,
-        Telefon: order.kupac_telefon,
-        Adresa: order.kupac_adresa,
-        Mesto: order.kupac_mesto,
-        'Ukupna cena': order.cena_ukupno,
-        Status: order.status_porudzbine,
-        'Datum kreiranja': new Date(order.kreirano).toLocaleString('sr-RS'),
-        'Poslednje ažuriranje': new Date(order.azurirano).toLocaleString('sr-RS')
-      }));
+      const { error } = await supabase
+        .from('porudzbine')
+        .update({ status_porudzbine: newStatus })
+        .eq('id', orderId);
 
-      exportToCSV(formattedData, `porudzbine-${new Date().toISOString().split('T')[0]}.csv`);
-      toast.success('CSV fajl je uspešno kreiran');
+      if (error) {
+        console.error(
+          'Supabase error:',
+          error.message,
+          error.details,
+          error.hint
+        );
+        throw error;
+      }
+
+      await fetchOrders();
+      toast.success('Status porudžbine uspešno ažuriran');
     } catch (error) {
-      console.error('Error exporting orders:', error);
-      toast.error('Greška pri kreiranju CSV fajla');
+      const err = error as any;
+      console.error('Error updating order status:', {
+        message: err?.message,
+        details: err?.details,
+        hint: err?.hint
+      });
+      toast.error('Greška pri ažuriranju statusa. Molimo pokušajte ponovo.');
     }
   }
 
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = 
-      order.kupac_ime.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.kupac_prezime.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.id.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || order.status_porudzbine === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  const getStatusIcon = (status: string) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case 'nova':
-        return <Package className="h-5 w-5 text-blue-500" />;
+        return 'bg-blue-50 text-blue-700';
       case 'u_obradi':
-        return <Truck className="h-5 w-5 text-yellow-500" />;
-      case 'zavrsena':
-        return <CheckCircle className="h-5 w-5 text-green-500" />;
+        return 'bg-yellow-50 text-yellow-700';
+      case 'poslata':
+        return 'bg-green-50 text-green-700';
+      case 'isporucena':
+        return 'bg-purple-50 text-purple-700';
       case 'otkazana':
-        return <XCircle className="h-5 w-5 text-red-500" />;
+        return 'bg-red-50 text-red-700';
       default:
-        return null;
+        return 'bg-gray-50 text-gray-700';
     }
   };
 
@@ -90,8 +146,10 @@ export default function OrdersTab() {
         return 'Nova';
       case 'u_obradi':
         return 'U obradi';
-      case 'zavrsena':
-        return 'Završena';
+      case 'poslata':
+        return 'Poslata';
+      case 'isporucena':
+        return 'Isporučena';
       case 'otkazana':
         return 'Otkazana';
       default:
@@ -99,115 +157,141 @@ export default function OrdersTab() {
     }
   };
 
-  const getStatusClass = (status: string) => {
-    switch (status) {
-      case 'nova':
-        return 'bg-blue-100 text-blue-800';
-      case 'u_obradi':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'zavrsena':
-        return 'bg-green-100 text-green-800';
-      case 'otkazana':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+  const filteredOrders = orders.filter(
+    (order) =>
+      order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (order.kupci as any)?.ime_kupca
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase()) ||
+      (order.kupci as any)?.prezime_kupca
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase())
+  );
 
-  if (loading) {
-    return (
-      <div className="animate-pulse space-y-4">
-        <div className="h-12 bg-gray-200 rounded"></div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-48 bg-gray-200 rounded-lg"></div>
-          ))}
-        </div>
-      </div>
-    );
+  async function handleExportCSV() {
+    try {
+      const ordersForExport = orders.map((order) => ({
+        ID: order.id,
+        Kupac: `${(order.kupci as any)?.ime_kupca} ${
+          (order.kupci as any)?.prezime_kupca
+        }`,
+        'Email kupca': (order.kupci as any)?.email,
+        Status: getStatusText(order.status_porudzbine || 'nova'),
+        'Ukupan iznos': `${order.cena_ukupno} RSD`,
+        'Datum kreiranja': new Date(order.kreirano).toLocaleString('sr-RS')
+      }));
+
+      exportToCSV(ordersForExport, 'porudzbine');
+      toast.success('Porudžbine uspešno izvezene');
+    } catch (error) {
+      console.error('Error exporting orders:', error);
+      toast.error('Greška pri izvozu porudžbina');
+    }
   }
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
+      <div className='flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8'>
         <div>
-          <h1 className="text-3xl font-bold">Porudžbine</h1>
-          <p className="text-gray-600 mt-1">Ukupno porudžbina: {orders.length}</p>
+          <h1 className='text-3xl font-bold'>Porudžbine</h1>
+          <p className='text-gray-600 mt-1'>
+            Upravljajte porudžbinama i njihovim statusima
+          </p>
         </div>
         <button
           onClick={handleExportCSV}
-          className="bg-blue-500 text-white px-6 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-600 transition-colors"
+          className='flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors'
         >
-          <Download className="h-5 w-5" />
+          <Download className='h-5 w-5' />
           <span>Izvezi CSV</span>
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="flex flex-col md:flex-row gap-4 mb-6">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Pretraži porudžbine..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-          <div className="w-full md:w-48">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">Svi statusi</option>
-              <option value="nova">Nove</option>
-              <option value="u_obradi">U obradi</option>
-              <option value="zavrsena">Završene</option>
-              <option value="otkazana">Otkazane</option>
-            </select>
+      <div className='bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden'>
+        <div className='p-4 border-b border-gray-200'>
+          <div className='relative'>
+            <input
+              type='text'
+              placeholder='Pretraži porudžbine...'
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className='w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent'
+              aria-label='Pretraži porudžbine'
+            />
+            <Search className='h-5 w-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2' />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredOrders.length === 0 ? (
-            <div className="col-span-full text-center text-gray-500 py-8">
-              Nema pronađenih porudžbina
+        <div className='divide-y divide-gray-200'>
+          {loading ? (
+            <div className='p-8 text-center text-gray-500'>
+              Učitavanje porudžbina...
             </div>
-          ) : (
-            filteredOrders.map(order => (
-              <div key={order.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                <div className="flex justify-between items-start mb-4">
+          ) : filteredOrders.length > 0 ? (
+            filteredOrders.map((order) => (
+              <div
+                key={order.id}
+                className='p-4 hover:bg-gray-50 transition-colors'
+              >
+                <div className='flex items-start justify-between'>
+                  <div className='space-y-3'>
+                    <div className='flex items-center space-x-3'>
+                      <Package className='h-5 w-5 text-gray-400' />
+                      <span className='font-medium'>
+                        Porudžbina #{order.id}
+                      </span>
+                      <span
+                        className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(
+                          order.status_porudzbine || 'nova'
+                        )}`}
+                      >
+                        {getStatusText(order.status_porudzbine || 'nova')}
+                      </span>
+                    </div>
+                    <div className='flex items-center space-x-3 text-sm text-gray-500'>
+                      <User className='h-4 w-4' />
+                      <span>
+                        {(order.kupci as any)?.ime_kupca}{' '}
+                        {(order.kupci as any)?.prezime_kupca}
+                      </span>
+                    </div>
+                    <div className='flex items-center space-x-3 text-sm text-gray-500'>
+                      <Clock className='h-4 w-4' />
+                      <span>
+                        {new Date(order.kreirano).toLocaleString('sr-RS')}
+                      </span>
+                    </div>
+                    <div className='flex items-center space-x-3 text-sm'>
+                      <DollarSign className='h-4 w-4 text-gray-400' />
+                      <span className='font-medium'>
+                        {order.cena_ukupno} RSD
+                      </span>
+                    </div>
+                  </div>
+
                   <div>
-                    <h3 className="font-semibold">{order.kupac_ime} {order.kupac_prezime}</h3>
-                    <p className="text-sm text-gray-600">{order.kupac_telefon}</p>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    {getStatusIcon(order.status_porudzbine)}
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      getStatusClass(order.status_porudzbine)
-                    }`}>
-                      {getStatusText(order.status_porudzbine)}
-                    </span>
-                  </div>
-                </div>
-                <div className="text-sm text-gray-600 mb-4">
-                  <p>{order.kupac_adresa}</p>
-                  <p>{order.kupac_mesto}</p>
-                </div>
-                <div className="flex justify-between items-center pt-4 border-t border-gray-200">
-                  <div className="text-sm text-gray-500">
-                    ID: {order.id.slice(0, 8)}
-                  </div>
-                  <div className="font-semibold text-yellow-600">
-                    {order.cena_ukupno.toLocaleString()} RSD
+                    <select
+                      value={order.status_porudzbine || 'nova'}
+                      onChange={(e) =>
+                        handleStatusChange(order.id, e.target.value)
+                      }
+                      className='border border-gray-300 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-yellow-400 focus:border-transparent'
+                      aria-label='Promeni status porudžbine'
+                    >
+                      <option value='nova'>Nova</option>
+                      <option value='u_obradi'>U obradi</option>
+                      <option value='poslata'>Poslata</option>
+                      <option value='isporucena'>Isporučena</option>
+                      <option value='otkazana'>Otkazana</option>
+                    </select>
                   </div>
                 </div>
               </div>
             ))
+          ) : (
+            <div className='p-8 text-center text-gray-500'>
+              Nema pronađenih porudžbina
+            </div>
           )}
         </div>
       </div>

@@ -3,11 +3,19 @@
 import { useState, useEffect } from 'react';
 import { Mail, Phone, MapPin, Search, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { exportToCSV } from '@/lib/utils/csv-export';
 import toast from 'react-hot-toast';
-import type { Database } from '@/lib/types/database.types';
+import { exportToCSV } from '@/lib/utils/csv-export';
 
-type Customer = Database['public']['Tables']['kupci']['Row'];
+type Customer = {
+  id: string;
+  ime_kupca: string;
+  prezime_kupca: string;
+  email: string;
+  telefon: string;
+  adresa: string;
+  mesto: string;
+  kreirano: string;
+};
 
 export default function CustomersTab() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -20,25 +28,48 @@ export default function CustomersTab() {
 
   async function fetchCustomers() {
     try {
-      setLoading(true);
       const { data, error } = await supabase
         .from('kupci')
         .select('*')
         .order('kreirano', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error(
+          'Supabase error:',
+          error.message,
+          error.details,
+          error.hint
+        );
+        throw error;
+      }
+
+      console.log('Fetched customers:', data);
       setCustomers(data || []);
     } catch (error) {
-      console.error('Error fetching customers:', error);
-      toast.error('Greška pri učitavanju kupaca');
+      const err = error as any;
+      console.error('Error fetching customers:', {
+        message: err?.message,
+        details: err?.details,
+        hint: err?.hint
+      });
+      toast.error('Greška pri učitavanju kupaca. Molimo pokušajte ponovo.');
     } finally {
       setLoading(false);
     }
   }
 
+  const filteredCustomers = customers.filter(
+    (customer) =>
+      customer.ime_kupca.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      customer.prezime_kupca
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase()) ||
+      customer.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   async function handleExportCSV() {
     try {
-      const formattedData = customers.map(customer => ({
+      const customersForExport = customers.map((customer) => ({
         ID: customer.id,
         Ime: customer.ime_kupca,
         Prezime: customer.prezime_kupca,
@@ -46,103 +77,96 @@ export default function CustomersTab() {
         Telefon: customer.telefon,
         Adresa: customer.adresa,
         Mesto: customer.mesto,
-        'Poštanski broj': customer.id_post,
-        'Datum registracije': new Date(customer.kreirano).toLocaleString('sr-RS')
+        'Datum registracije': new Date(customer.kreirano).toLocaleDateString(
+          'sr-RS'
+        )
       }));
 
-      exportToCSV(formattedData, `kupci-${new Date().toISOString().split('T')[0]}.csv`);
-      toast.success('CSV fajl je uspešno kreiran');
+      exportToCSV(customersForExport, 'kupci');
+      toast.success('Kupci uspešno izvezeni');
     } catch (error) {
       console.error('Error exporting customers:', error);
-      toast.error('Greška pri kreiranju CSV fajla');
+      toast.error('Greška pri izvozu kupaca');
     }
-  }
-
-  const filteredCustomers = customers.filter(customer => {
-    const searchStr = searchQuery.toLowerCase();
-    return (
-      customer.ime_kupca.toLowerCase().includes(searchStr) ||
-      customer.prezime_kupca.toLowerCase().includes(searchStr) ||
-      customer.email.toLowerCase().includes(searchStr) ||
-      customer.mesto.toLowerCase().includes(searchStr)
-    );
-  });
-
-  if (loading) {
-    return (
-      <div className="animate-pulse space-y-4">
-        <div className="h-12 bg-gray-200 rounded"></div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-48 bg-gray-200 rounded-lg"></div>
-          ))}
-        </div>
-      </div>
-    );
   }
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
+      <div className='flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8'>
         <div>
-          <h1 className="text-3xl font-bold">Kupci</h1>
-          <p className="text-gray-600 mt-1">Ukupno kupaca: {customers.length}</p>
+          <h1 className='text-3xl font-bold'>Kupci</h1>
+          <p className='text-gray-600 mt-1'>
+            Upravljajte kupcima i njihovim podacima
+          </p>
         </div>
         <button
           onClick={handleExportCSV}
-          className="bg-blue-500 text-white px-6 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-600 transition-colors"
+          className='flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors'
         >
-          <Download className="h-5 w-5" />
+          <Download className='h-5 w-5' />
           <span>Izvezi CSV</span>
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="relative mb-6">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Pretraži kupce..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+      <div className='bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden'>
+        <div className='p-4 border-b border-gray-200'>
+          <div className='relative'>
+            <input
+              type='text'
+              placeholder='Pretraži kupce...'
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className='w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent'
+              aria-label='Pretraži kupce'
+            />
+            <Search className='h-5 w-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2' />
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredCustomers.length === 0 ? (
-            <div className="col-span-full text-center text-gray-500 py-8">
-              Nema pronađenih kupaca
+        <div className='divide-y divide-gray-200'>
+          {loading ? (
+            <div className='p-8 text-center text-gray-500'>
+              Učitavanje kupaca...
             </div>
-          ) : (
+          ) : filteredCustomers.length > 0 ? (
             filteredCustomers.map((customer) => (
-              <div key={customer.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                <div className="flex justify-between items-start mb-4">
-                  <h3 className="text-lg font-semibold">
-                    {customer.ime_kupca} {customer.prezime_kupca}
-                  </h3>
-                  <span className="text-sm text-gray-500">
+              <div
+                key={customer.id}
+                className='p-4 hover:bg-gray-50 transition-colors'
+              >
+                <div className='flex items-start justify-between'>
+                  <div>
+                    <h3 className='font-medium text-gray-900'>
+                      {customer.ime_kupca} {customer.prezime_kupca}
+                    </h3>
+                    <div className='mt-2 space-y-1 text-sm text-gray-500'>
+                      <div className='flex items-center space-x-2'>
+                        <Mail className='h-4 w-4' />
+                        <span>{customer.email}</span>
+                      </div>
+                      <div className='flex items-center space-x-2'>
+                        <Phone className='h-4 w-4' />
+                        <span>{customer.telefon}</span>
+                      </div>
+                      <div className='flex items-center space-x-2'>
+                        <MapPin className='h-4 w-4' />
+                        <span>
+                          {customer.adresa}, {customer.mesto}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className='text-sm text-gray-500'>
+                    Član od:{' '}
                     {new Date(customer.kreirano).toLocaleDateString('sr-RS')}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center text-gray-600">
-                    <Mail className="h-4 w-4 mr-2" />
-                    <span className="text-sm">{customer.email}</span>
-                  </div>
-                  <div className="flex items-center text-gray-600">
-                    <Phone className="h-4 w-4 mr-2" />
-                    <span className="text-sm">{customer.telefon}</span>
-                  </div>
-                  <div className="flex items-center text-gray-600">
-                    <MapPin className="h-4 w-4 mr-2" />
-                    <span className="text-sm">
-                      {customer.adresa}, {customer.mesto} {customer.id_post}
-                    </span>
                   </div>
                 </div>
               </div>
             ))
+          ) : (
+            <div className='p-8 text-center text-gray-500'>
+              Nema pronađenih kupaca
+            </div>
           )}
         </div>
       </div>

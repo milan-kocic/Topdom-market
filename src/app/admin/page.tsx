@@ -22,7 +22,9 @@ import {
   ShoppingCart,
   ShoppingBag,
   Menu,
-  X
+  X,
+  Wallet,
+  CreditCard
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
@@ -31,8 +33,16 @@ import ProductsTab from './tabs/ProductsTab';
 import OrdersTab from './tabs/OrdersTab';
 import CustomersTab from './tabs/CustomersTab';
 import StatisticsTab from './tabs/StatisticsTab';
+import ExpensesTab from './tabs/ExpensesTab';
+import RevenueTab from './tabs/RevenueTab';
 
-type TabType = 'products' | 'orders' | 'customers' | 'statistics';
+type TabType =
+  | 'products'
+  | 'orders'
+  | 'customers'
+  | 'statistics'
+  | 'revenue'
+  | 'expenses';
 
 interface Statistics {
   totalOrders: number;
@@ -205,6 +215,34 @@ export default function AdminDashboard() {
               </button>
               <button
                 onClick={() => {
+                  setActiveTab('revenue');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex items-center space-x-2 w-full px-4 py-2 rounded-lg ${
+                  activeTab === 'revenue'
+                    ? 'bg-yellow-100 text-yellow-600'
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                <CreditCard className='h-5 w-5' />
+                <span>Prihodi</span>
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('expenses');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex items-center space-x-2 w-full px-4 py-2 rounded-lg ${
+                  activeTab === 'expenses'
+                    ? 'bg-yellow-100 text-yellow-600'
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                <Wallet className='h-5 w-5' />
+                <span>Troškovi</span>
+              </button>
+              <button
+                onClick={() => {
                   setActiveTab('statistics');
                   setIsMobileMenuOpen(false);
                 }}
@@ -345,6 +383,34 @@ export default function AdminDashboard() {
               </button>
 
               <button
+                onClick={() => setActiveTab('revenue')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'revenue'
+                    ? 'border-yellow-500 text-yellow-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } transition-colors`}
+              >
+                <div className='flex items-center space-x-2'>
+                  <CreditCard className='h-5 w-5' />
+                  <span>Prihodi</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('expenses')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'expenses'
+                    ? 'border-yellow-500 text-yellow-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } transition-colors`}
+              >
+                <div className='flex items-center space-x-2'>
+                  <Wallet className='h-5 w-5' />
+                  <span>Troškovi</span>
+                </div>
+              </button>
+
+              <button
                 onClick={() => setActiveTab('statistics')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'statistics'
@@ -365,6 +431,8 @@ export default function AdminDashboard() {
             {activeTab === 'products' && <ProductsTab />}
             {activeTab === 'orders' && <OrdersTab />}
             {activeTab === 'customers' && <CustomersTab />}
+            {activeTab === 'revenue' && <RevenueTab />}
+            {activeTab === 'expenses' && <ExpensesTab />}
             {activeTab === 'statistics' && <StatisticsTab />}
           </div>
         </div>

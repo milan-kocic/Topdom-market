@@ -103,28 +103,43 @@ export interface Database {
         Row: {
           id: string;
           id_kupca: string;
-          status: string;
-          ukupan_iznos: number;
-          created_at: string;
+          status_porudzbine:
+            | 'nova'
+            | 'u_obradi'
+            | 'poslata'
+            | 'isporucena'
+            | 'otkazana';
+          cena_ukupno: number;
+          kreirano: string;
           kupci?: {
-            ime: string;
-            prezime: string;
+            ime_kupca: string;
+            prezime_kupca: string;
             email: string;
           };
         };
         Insert: {
           id?: string;
           id_kupca: string;
-          status: string;
-          ukupan_iznos: number;
-          created_at?: string;
+          status_porudzbine:
+            | 'nova'
+            | 'u_obradi'
+            | 'poslata'
+            | 'isporucena'
+            | 'otkazana';
+          cena_ukupno: number;
+          kreirano?: string;
         };
         Update: {
           id?: string;
           id_kupca?: string;
-          status?: string;
-          ukupan_iznos?: number;
-          created_at?: string;
+          status_porudzbine?:
+            | 'nova'
+            | 'u_obradi'
+            | 'poslata'
+            | 'isporucena'
+            | 'otkazana';
+          cena_ukupno?: number;
+          kreirano?: string;
         };
       };
       stavke_porudzbine: {
@@ -191,6 +206,38 @@ export interface Database {
           id?: string;
           id_proizvoda?: string;
           opis?: string;
+        };
+      };
+      troskovi: {
+        Row: {
+          id: string;
+          naziv: string;
+          opis: string | null;
+          iznos: number;
+          datum: string;
+          kategorija: string;
+          kreirano: string;
+          azurirano: string;
+        };
+        Insert: {
+          id?: string;
+          naziv: string;
+          opis?: string | null;
+          iznos: number;
+          datum: string;
+          kategorija: string;
+          kreirano?: string;
+          azurirano?: string;
+        };
+        Update: {
+          id?: string;
+          naziv?: string;
+          opis?: string | null;
+          iznos?: number;
+          datum?: string;
+          kategorija?: string;
+          kreirano?: string;
+          azurirano?: string;
         };
       };
     };

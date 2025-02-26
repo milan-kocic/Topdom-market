@@ -87,37 +87,84 @@ export default function StatisticsTab() {
 
   async function fetchStatistics() {
     try {
+      console.log(
+        'Započinjem dohvatanje statistike za period:',
+        stats.dateRange
+      );
+
       // Fetch total orders and calculate revenue for selected period
       const { data: orders, error: ordersError } = await supabase
         .from('porudzbine')
-        .select('id, cena_ukupno, kreirano')
+        .select(
+          `
+          id,
+          cena_ukupno,
+          kreirano,
+          status_porudzbine
+        `
+        )
         .gte('kreirano', stats.dateRange.startDate)
         .lte('kreirano', stats.dateRange.endDate + ' 23:59:59');
 
       if (ordersError) {
-        console.error(
-          'Supabase orders error:',
-          ordersError.message,
-          ordersError.details
-        );
+        console.error('Greška pri dohvatanju porudžbina:', {
+          message: ordersError.message,
+          details: ordersError.details,
+          hint: ordersError.hint,
+          code: ordersError.code
+        });
         throw ordersError;
       }
 
+      console.log('Uspešno dohvaćene porudžbine:', {
+        brojPorudzbina: orders?.length,
+        prvaPorudzbina: orders?.[0]
+      });
+
       // Fetch total customers for selected period
       const { data: customers, error: customersError } = await supabase
-        .from('kupci')
-        .select('id, kreirano')
+        .from('porudzbine')
+        .select('kupac_ime, kupac_prezime')
         .gte('kreirano', stats.dateRange.startDate)
         .lte('kreirano', stats.dateRange.endDate + ' 23:59:59');
 
-      if (customersError) throw customersError;
+      if (customersError) {
+        console.error('Greška pri dohvatanju kupaca:', {
+          message: customersError.message,
+          details: customersError.details,
+          hint: customersError.hint,
+          code: customersError.code
+        });
+        throw customersError;
+      }
 
-      // Fetch total products (ovo ostaje isto jer želimo ukupan broj proizvoda)
+      // Računamo jedinstvene kupce po imenu i prezimenu
+      const uniqueCustomers = new Set(
+        customers?.map((c) => `${c.kupac_ime} ${c.kupac_prezime}`)
+      );
+
+      console.log('Uspešno dohvaćeni kupci:', {
+        brojJedinstvenihKupaca: uniqueCustomers.size
+      });
+
+      // Fetch total products
       const { count: productsCount, error: productsError } = await supabase
         .from('proizvodi')
-        .select('id', { count: 'exact' });
+        .select('id', { count: 'exact', head: true });
 
-      if (productsError) throw productsError;
+      if (productsError) {
+        console.error('Greška pri dohvatanju proizvoda:', {
+          message: productsError.message,
+          details: productsError.details,
+          hint: productsError.hint,
+          code: productsError.code
+        });
+        throw productsError;
+      }
+
+      console.log('Uspešno dohvaćeni proizvodi:', {
+        ukupnoProizvoda: productsCount
+      });
 
       // Calculate total revenue for period
       const totalRevenue =
@@ -153,10 +200,8 @@ export default function StatisticsTab() {
           cena_ukupno,
           status_porudzbine,
           kreirano,
-          kupci (
-            ime_kupca,
-            prezime_kupca
-          )
+          kupac_ime,
+          kupac_prezime
         `
         )
         .gte('kreirano', stats.dateRange.startDate)
@@ -164,20 +209,51 @@ export default function StatisticsTab() {
         .order('kreirano', { ascending: false })
         .limit(5);
 
-      if (recentOrdersError) throw recentOrdersError;
+      if (recentOrdersError) {
+        console.error('Greška pri dohvatanju nedavnih porudžbina:', {
+          message: recentOrdersError.message,
+          details: recentOrdersError.details,
+          hint: recentOrdersError.hint,
+          code: recentOrdersError.code
+        });
+        throw recentOrdersError;
+      }
+
+      console.log('Uspešno dohvaćene nedavne porudžbine:', {
+        brojNedavnihPorudzbina: recentOrders?.length,
+        prvaPorudzbina: recentOrders?.[0]
+      });
+
+      // Transform recent orders
+      const transformedRecentOrders =
+        recentOrders?.map((order) => ({
+          ...order,
+          kupci: {
+            ime_kupca: order.kupac_ime,
+            prezime_kupca: order.kupac_prezime
+          }
+        })) || [];
 
       setStats((prev) => ({
         ...prev,
         totalOrders: orders?.length || 0,
-        totalCustomers: customers?.length || 0,
+        totalCustomers: uniqueCustomers.size,
         totalRevenue,
         totalProducts: productsCount || 0,
-        recentOrders: recentOrders || [],
+        recentOrders: transformedRecentOrders,
         dailyRevenue
       }));
-    } catch (error) {
-      console.error('Error fetching statistics:', error);
-      toast.error('Greška pri učitavanju statistike');
+
+      console.log('Statistika uspešno ažurirana');
+    } catch (error: any) {
+      console.error('Greška pri dohvatanju statistike:', {
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        code: error?.code,
+        stack: error?.stack
+      });
+      toast.error('Greška pri učitavanju statistike. Molimo pokušajte ponovo.');
     } finally {
       setLoading(false);
     }

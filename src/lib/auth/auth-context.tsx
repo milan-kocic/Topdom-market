@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
+import toast from 'react-hot-toast';
 
 type AuthContextType = {
   user: User | null;
@@ -18,117 +19,105 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const ADMIN_EMAIL = 'admin@topdom.rs';
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    console.log('AuthProvider: Checking initial session');
+    checkSession();
 
-    // Check active sessions and sets the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('AuthProvider: Initial session check result:', session);
-      setUser(session?.user ?? null);
-      checkAdminStatus(session?.user?.id);
-      setLoading(false);
-    });
-
-    // Listen for changes on auth state (logged in, signed out, etc.)
     const {
       data: { subscription }
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      console.log('AuthProvider: Auth state changed:', {
-        event: _event,
-        session
-      });
-      setUser(session?.user ?? null);
-      checkAdminStatus(session?.user?.id);
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      setIsAdmin(currentUser?.email === ADMIN_EMAIL);
       setLoading(false);
-
-      // Handle navigation based on auth state
-      if (_event === 'SIGNED_IN') {
-        window.location.href = '/admin';
-      } else if (_event === 'SIGNED_OUT') {
-        window.location.href = '/login';
-      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  async function checkAdminStatus(userId: string | undefined) {
-    if (!userId) {
-      setIsAdmin(false);
-      return;
-    }
-
+  async function checkSession() {
     try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .single();
-
-      setIsAdmin(profile?.role === 'admin');
+      const {
+        data: { session }
+      } = await supabase.auth.getSession();
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      setIsAdmin(currentUser?.email === ADMIN_EMAIL);
     } catch (error) {
-      console.error('Error checking admin status:', error);
-      setIsAdmin(false);
+      console.error('Greška pri proveri sesije:', error);
+    } finally {
+      setLoading(false);
     }
   }
 
-  const signIn = async (email: string, password: string) => {
-    console.log('AuthProvider: Attempting sign in for:', email);
+  async function signIn(email: string, password: string) {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
-      console.log('AuthProvider: Sign in result:', { data, error });
+      if (error) throw error;
 
-      if (error) {
-        console.error('AuthProvider: Sign in error:', error);
-        return { success: false, error };
-      }
-
-      if (!data.session) {
-        console.error('AuthProvider: No session created');
-        return { success: false, error: new Error('No session created') };
-      }
-
-      console.log('AuthProvider: Sign in successful, user:', data.user);
+      setIsAdmin(data.user?.email === ADMIN_EMAIL);
       return { success: true };
-    } catch (error) {
-      console.error('AuthProvider: Unexpected error during sign in:', error);
+    } catch (error: any) {
+      console.error('Greška pri prijavljivanju:', error);
+      toast.error('Pogrešan email ili lozinka');
       return { success: false, error };
     }
-  };
+  }
 
-  const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password
-    });
-    if (error) throw error;
-  };
+  async function signUp(email: string, password: string) {
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password
+      });
 
-  const signOut = async () => {
-    console.log('AuthProvider: Signing out');
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-  };
+      if (error) throw error;
 
-  const value = {
-    user,
-    loading,
-    signIn,
-    signUp,
-    signOut,
-    isAdmin
-  };
+      toast.success('Uspešno ste se registrovali! Proverite email za potvrdu.');
+    } catch (error: any) {
+      console.error('Greška pri registraciji:', error);
+      toast.error('Greška pri registraciji. Pokušajte ponovo.');
+    }
+  }
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  async function signOut() {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setUser(null);
+      setIsAdmin(false);
+    } catch (error: any) {
+      console.error('Greška pri odjavljivanju:', error);
+      toast.error('Greška pri odjavljivanju');
+    }
+  }
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        signIn,
+        signUp,
+        signOut,
+        isAdmin
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

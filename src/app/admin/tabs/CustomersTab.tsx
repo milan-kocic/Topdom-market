@@ -2,20 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { Mail, Phone, MapPin, Search, Download } from 'lucide-react';
-import { supabase } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
 import { exportToCSV } from '@/lib/utils/csv-export';
+import type { Database } from '@/types/supabase';
 
-type Customer = {
-  id: string;
-  ime_kupca: string;
-  prezime_kupca: string;
-  email: string;
-  telefon: string;
-  adresa: string;
-  mesto: string;
-  kreirano: string;
-};
+type Customer = Database['public']['Tables']['kupci']['Row'];
 
 export default function CustomersTab() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -64,7 +56,7 @@ export default function CustomersTab() {
       customer.prezime_kupca
         .toLowerCase()
         .includes(searchQuery.toLowerCase()) ||
-      customer.email.toLowerCase().includes(searchQuery.toLowerCase())
+      (customer.email?.toLowerCase() || '').includes(searchQuery.toLowerCase())
   );
 
   async function handleExportCSV() {
@@ -73,10 +65,10 @@ export default function CustomersTab() {
         ID: customer.id,
         Ime: customer.ime_kupca,
         Prezime: customer.prezime_kupca,
-        Email: customer.email,
-        Telefon: customer.telefon,
+        Email: customer.email || '',
         Adresa: customer.adresa,
         Mesto: customer.mesto,
+        'Poštanski broj': customer.id_post,
         'Datum registracije': new Date(customer.kreirano).toLocaleDateString(
           'sr-RS'
         )
@@ -140,18 +132,16 @@ export default function CustomersTab() {
                       {customer.ime_kupca} {customer.prezime_kupca}
                     </h3>
                     <div className='mt-2 space-y-1 text-sm text-gray-500'>
-                      <div className='flex items-center space-x-2'>
-                        <Mail className='h-4 w-4' />
-                        <span>{customer.email}</span>
-                      </div>
-                      <div className='flex items-center space-x-2'>
-                        <Phone className='h-4 w-4' />
-                        <span>{customer.telefon}</span>
-                      </div>
+                      {customer.email && (
+                        <div className='flex items-center space-x-2'>
+                          <Mail className='h-4 w-4' />
+                          <span>{customer.email}</span>
+                        </div>
+                      )}
                       <div className='flex items-center space-x-2'>
                         <MapPin className='h-4 w-4' />
                         <span>
-                          {customer.adresa}, {customer.mesto}
+                          {customer.adresa}, {customer.mesto} {customer.id_post}
                         </span>
                       </div>
                     </div>

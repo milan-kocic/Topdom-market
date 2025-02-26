@@ -78,17 +78,10 @@ export default function AdminDashboard() {
         data: { user }
       } = await supabase.auth.getUser();
       if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-
         setAdminInfo({
           email: user.email,
           lastSignIn: user.last_sign_in_at,
-          created: user.created_at,
-          ...profile
+          created: user.created_at
         });
       }
     } catch (error) {

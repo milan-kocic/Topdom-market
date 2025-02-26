@@ -1,4 +1,4 @@
-// File: C:\Users\MSI\Documents\Programiranje\TOPDOM\Topdom-market\src\app\layout.tsx
+// File: C:\Users\MSI\Documents\Programiranje\TopDom Market 1\Topdom-market\src\app\layout.tsx
 import * as entry from '../../../src/app/layout.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

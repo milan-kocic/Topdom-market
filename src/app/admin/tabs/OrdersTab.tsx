@@ -7,25 +7,43 @@ import {
   Clock,
   User,
   DollarSign,
-  Download
+  Download,
+  ChevronDown,
+  ChevronUp,
+  History
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
 import { exportToCSV } from '@/lib/utils/csv-export';
-import type { Database } from '@/lib/types/database.types';
+import type { Database } from '@/types/supabase';
 
 type Order = {
   id: string;
-  id_kupca: string;
+  kreirano: string;
   status_porudzbine: string;
   cena_ukupno: number;
+  kupac: string;
+  broj_stavki: number;
+  proizvodi: string;
+};
+
+type StavkaPorudzbine = {
+  id: string;
+  proizvodi?: {
+    naziv_proizvoda?: string;
+  };
+};
+
+type PorudzbinaResponse = {
+  id: string;
   kreirano: string;
+  status_porudzbine: string;
+  cena_ukupno: number;
   kupci?: {
-    id: string;
     ime_kupca: string;
     prezime_kupca: string;
-    email: string;
   };
+  stavke_porudzbine?: StavkaPorudzbine[];
 };
 
 export default function OrdersTab() {
@@ -39,55 +57,71 @@ export default function OrdersTab() {
 
   async function fetchOrders() {
     try {
-      const { data, error } = await supabase
+      setLoading(true);
+      console.log('Započinjem dohvatanje porudžbina...');
+
+      const { data: porudzbine, error: porudzbineError } = await supabase
         .from('porudzbine')
         .select(
           `
-          *,
+          id,
+          kreirano,
+          status_porudzbine,
+          cena_ukupno,
           kupci (
-            id,
             ime_kupca,
-            prezime_kupca,
-            email
+            prezime_kupca
+          ),
+          stavke_porudzbine (
+            id,
+            proizvodi (
+              naziv_proizvoda
+            )
           )
         `
         )
         .order('kreirano', { ascending: false });
 
-      if (error) {
-        console.error(
-          'Supabase error:',
-          error.message,
-          error.details,
-          error.hint
-        );
-        throw error;
+      if (porudzbineError) {
+        console.error('Greška pri dohvatanju porudžbina:', porudzbineError);
+        toast.error('Greška pri učitavanju porudžbina');
+        return;
       }
 
-      console.log('Fetched orders:', data);
-      setOrders(
-        (data || []).map((order) => ({
-          ...order,
-          status: order.status_porudzbine,
-          ukupan_iznos: order.cena_ukupno,
-          created_at: order.kreirano,
-          kupci: order.kupci
-            ? {
-                ime: order.kupci.ime_kupca,
-                prezime: order.kupci.prezime_kupca,
-                email: order.kupci.email
-              }
-            : undefined
-        }))
+      if (!porudzbine || porudzbine.length === 0) {
+        console.log('Nema pronađenih porudžbina');
+        setOrders([]);
+        return;
+      }
+
+      // Transformišemo podatke u format koji očekuje komponenta
+      const transformedOrders: Order[] = porudzbine.map(
+        (p: PorudzbinaResponse) => ({
+          id: p.id,
+          kreirano: p.kreirano,
+          status_porudzbine: p.status_porudzbine,
+          cena_ukupno: p.cena_ukupno,
+          kupac: p.kupci
+            ? `${p.kupci.ime_kupca} ${p.kupci.prezime_kupca}`
+            : 'Nepoznat kupac',
+          broj_stavki: p.stavke_porudzbine?.length || 0,
+          proizvodi:
+            p.stavke_porudzbine
+              ?.map((s) => s.proizvodi?.naziv_proizvoda)
+              .filter(Boolean)
+              .join(', ') || ''
+        })
       );
-    } catch (error) {
-      const err = error as any;
-      console.error('Error fetching orders:', {
-        message: err?.message,
-        details: err?.details,
-        hint: err?.hint
+
+      console.log('Uspešno dohvaćene porudžbine:', {
+        brojPorudzbina: transformedOrders.length,
+        prvaPorudzbina: transformedOrders[0]
       });
-      toast.error('Greška pri učitavanju porudžbina. Molimo pokušajte ponovo.');
+
+      setOrders(transformedOrders);
+    } catch (error) {
+      console.error('Neočekivana greška:', error);
+      toast.error('Greška pri učitavanju porudžbina');
     } finally {
       setLoading(false);
     }
@@ -101,93 +135,39 @@ export default function OrdersTab() {
         .eq('id', orderId);
 
       if (error) {
-        console.error(
-          'Supabase error:',
-          error.message,
-          error.details,
-          error.hint
-        );
-        throw error;
+        console.error('Greška pri ažuriranju statusa:', error);
+        toast.error('Greška pri ažuriranju statusa porudžbine');
+        return;
       }
 
       await fetchOrders();
       toast.success('Status porudžbine uspešno ažuriran');
     } catch (error) {
-      const err = error as any;
-      console.error('Error updating order status:', {
-        message: err?.message,
-        details: err?.details,
-        hint: err?.hint
-      });
-      toast.error('Greška pri ažuriranju statusa. Molimo pokušajte ponovo.');
+      console.error('Neočekivana greška pri ažuriranju statusa:', error);
+      toast.error('Greška pri ažuriranju statusa');
     }
   }
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'nova':
-        return 'bg-blue-50 text-blue-700';
-      case 'u_obradi':
+      case 'Obrada':
         return 'bg-yellow-50 text-yellow-700';
-      case 'poslata':
+      case 'Otpremljeno':
+        return 'bg-blue-50 text-blue-700';
+      case 'Isporučeno':
         return 'bg-green-50 text-green-700';
-      case 'isporucena':
-        return 'bg-purple-50 text-purple-700';
-      case 'otkazana':
+      case 'Otkazano':
         return 'bg-red-50 text-red-700';
       default:
         return 'bg-gray-50 text-gray-700';
     }
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'nova':
-        return 'Nova';
-      case 'u_obradi':
-        return 'U obradi';
-      case 'poslata':
-        return 'Poslata';
-      case 'isporucena':
-        return 'Isporučena';
-      case 'otkazana':
-        return 'Otkazana';
-      default:
-        return status;
-    }
-  };
-
   const filteredOrders = orders.filter(
     (order) =>
-      order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (order.kupci as any)?.ime_kupca
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase()) ||
-      (order.kupci as any)?.prezime_kupca
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase())
+      order.kupac.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      order.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  async function handleExportCSV() {
-    try {
-      const ordersForExport = orders.map((order) => ({
-        ID: order.id,
-        Kupac: `${(order.kupci as any)?.ime_kupca} ${
-          (order.kupci as any)?.prezime_kupca
-        }`,
-        'Email kupca': (order.kupci as any)?.email,
-        Status: getStatusText(order.status_porudzbine || 'nova'),
-        'Ukupan iznos': `${order.cena_ukupno} RSD`,
-        'Datum kreiranja': new Date(order.kreirano).toLocaleString('sr-RS')
-      }));
-
-      exportToCSV(ordersForExport, 'porudzbine');
-      toast.success('Porudžbine uspešno izvezene');
-    } catch (error) {
-      console.error('Error exporting orders:', error);
-      toast.error('Greška pri izvozu porudžbina');
-    }
-  }
 
   return (
     <div>
@@ -198,13 +178,6 @@ export default function OrdersTab() {
             Upravljajte porudžbinama i njihovim statusima
           </p>
         </div>
-        <button
-          onClick={handleExportCSV}
-          className='flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors'
-        >
-          <Download className='h-5 w-5' />
-          <span>Izvezi CSV</span>
-        </button>
       </div>
 
       <div className='bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden'>
@@ -242,18 +215,15 @@ export default function OrdersTab() {
                       </span>
                       <span
                         className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(
-                          order.status_porudzbine || 'nova'
+                          order.status_porudzbine
                         )}`}
                       >
-                        {getStatusText(order.status_porudzbine || 'nova')}
+                        {order.status_porudzbine}
                       </span>
                     </div>
                     <div className='flex items-center space-x-3 text-sm text-gray-500'>
                       <User className='h-4 w-4' />
-                      <span>
-                        {(order.kupci as any)?.ime_kupca}{' '}
-                        {(order.kupci as any)?.prezime_kupca}
-                      </span>
+                      <span>{order.kupac}</span>
                     </div>
                     <div className='flex items-center space-x-3 text-sm text-gray-500'>
                       <Clock className='h-4 w-4' />
@@ -264,25 +234,27 @@ export default function OrdersTab() {
                     <div className='flex items-center space-x-3 text-sm'>
                       <DollarSign className='h-4 w-4 text-gray-400' />
                       <span className='font-medium'>
-                        {order.cena_ukupno} RSD
+                        {order.cena_ukupno.toLocaleString('sr-RS')} RSD
                       </span>
                     </div>
+                    <div className='text-sm text-gray-500'>
+                      <span className='font-medium'>Proizvodi: </span>
+                      {order.proizvodi}
+                    </div>
                   </div>
-
                   <div>
                     <select
-                      value={order.status_porudzbine || 'nova'}
+                      value={order.status_porudzbine}
                       onChange={(e) =>
                         handleStatusChange(order.id, e.target.value)
                       }
                       className='border border-gray-300 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-yellow-400 focus:border-transparent'
-                      aria-label='Promeni status porudžbine'
+                      aria-label='Status porudžbine'
                     >
-                      <option value='nova'>Nova</option>
-                      <option value='u_obradi'>U obradi</option>
-                      <option value='poslata'>Poslata</option>
-                      <option value='isporucena'>Isporučena</option>
-                      <option value='otkazana'>Otkazana</option>
+                      <option value='Obrada'>Obrada</option>
+                      <option value='Otpremljeno'>Otpremljeno</option>
+                      <option value='Isporučeno'>Isporučeno</option>
+                      <option value='Otkazano'>Otkazano</option>
                     </select>
                   </div>
                 </div>

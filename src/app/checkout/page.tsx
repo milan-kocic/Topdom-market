@@ -1,11 +1,9 @@
 'use client';
 
-import * as React from 'react';
-import { useState } from 'react';
-// Komentarišemo problematične importe dok ne rešimo problem
-// import { useAuth } from '@/lib/auth/auth-context';
-// import { supabase } from '@/lib/supabase/client';
-// import { useApp } from '@/lib/context/AppContext';
+import React, { useState } from 'react';
+import { useAuth } from '../../lib/auth/auth-context';
+import { supabase } from '../../lib/supabase/client';
+import { useApp } from '../../lib/context/AppContext';
 import toast from 'react-hot-toast';
 
 // Tip za podatke o kupcu
@@ -20,34 +18,24 @@ type CustomerData = {
 };
 
 export default function CheckoutPage() {
-  // const { user, userProfile } = useAuth();
-  // const { state } = useApp();
-  // const { cart } = state;
-  // const totalPrice = cart.reduce(
-  //   (total, item) => total + item.cena * item.quantity,
-  //   0
-  // );
-
-  // Privremene vrednosti za demonstraciju
-  const user = null;
-  const cart: any[] = [];
-  const totalPrice = 0;
-  const supabase = {
-    from: () => ({ update: () => ({ eq: () => ({ error: null }) }) }),
-    rpc: () => ({ error: null, data: null })
-  };
-
+  const { user, userProfile } = useAuth();
+  const { state } = useApp();
+  const { cart } = state;
+  const totalPrice = cart.reduce(
+    (total, item) => total + item.cena * item.quantity,
+    0
+  );
   const clearCart = () => {
     // Implementacija clearCart funkcije
   };
   const [loading, setLoading] = useState(false);
   const [customerData, setCustomerData] = useState<CustomerData>({
-    ime_kupca: '',
-    prezime_kupca: '',
-    email: '',
-    adresa: '',
-    mesto: '',
-    id_post: '',
+    ime_kupca: userProfile?.ime_kupca || '',
+    prezime_kupca: userProfile?.prezime_kupca || '',
+    email: userProfile?.email || '',
+    adresa: userProfile?.adresa || '',
+    mesto: userProfile?.mesto || '',
+    id_post: userProfile?.id_post || '',
     telefon: ''
   });
 
@@ -95,33 +83,64 @@ export default function CheckoutPage() {
     e.preventDefault();
 
     if (!validateForm()) return;
-    // if (cart.length === 0) {
-    //   toast.error('Vaša korpa je prazna');
-    //   return;
-    // }
+    if (cart.length === 0) {
+      toast.error('Vaša korpa je prazna');
+      return;
+    }
 
     setLoading(true);
 
     try {
-      // Ovde bi trebalo da bude kod za kreiranje porudžbine
-      // Privremeno komentarišemo kod koji koristi supabase
-      /*
-      let kupacId = null;
+      let kupacId;
 
-      // Prvo kreiramo ili ažuriramo kupca
-      try {
-        // Ako je korisnik prijavljen, koristimo njegov ID
-        if (user) {
-          kupacId = user.id;
+      // Ako je korisnik prijavljen, koristimo njegov ID
+      if (user) {
+        kupacId = user.id;
 
-          // Ažuriramo podatke o korisniku ako su se promenili
-          if (
-            userProfile?.ime_kupca !== customerData.ime_kupca ||
-            userProfile?.prezime_kupca !== customerData.prezime_kupca ||
-            userProfile?.adresa !== customerData.adresa ||
-            userProfile?.mesto !== customerData.mesto ||
-            userProfile?.id_post !== customerData.id_post
-          ) {
+        // Ažuriramo podatke o korisniku ako su se promenili
+        if (
+          userProfile?.ime_kupca !== customerData.ime_kupca ||
+          userProfile?.prezime_kupca !== customerData.prezime_kupca ||
+          userProfile?.adresa !== customerData.adresa ||
+          userProfile?.mesto !== customerData.mesto ||
+          userProfile?.id_post !== customerData.id_post
+        ) {
+          const { error: updateError } = await supabase
+            .from('kupci')
+            .update({
+              ime_kupca: customerData.ime_kupca,
+              prezime_kupca: customerData.prezime_kupca,
+              adresa: customerData.adresa,
+              mesto: customerData.mesto,
+              id_post: customerData.id_post
+            })
+            .eq('id', user.id);
+
+          if (updateError) {
+            console.error(
+              'Greška pri ažuriranju podataka o kupcu:',
+              updateError
+            );
+            toast.error('Greška pri ažuriranju podataka o kupcu');
+            setLoading(false);
+            return;
+          }
+        }
+      } else {
+        // Ako korisnik nije prijavljen, proveravamo da li postoji kupac sa datim email-om
+        if (customerData.email) {
+          const { data: existingCustomer, error: fetchError } =
+            await supabase.rpc('dohvati_kupca_po_email', {
+              p_email: customerData.email
+            });
+
+          if (fetchError) {
+            console.error('Greška pri proveri postojećeg kupca:', fetchError);
+          } else if (existingCustomer && existingCustomer.length > 0) {
+            // Koristimo postojećeg kupca
+            kupacId = existingCustomer[0].id;
+
+            // Ažuriramo podatke o kupcu
             const { error: updateError } = await supabase
               .from('kupci')
               .update({
@@ -131,50 +150,13 @@ export default function CheckoutPage() {
                 mesto: customerData.mesto,
                 id_post: customerData.id_post
               })
-              .eq('id', user.id);
+              .eq('id', kupacId);
 
             if (updateError) {
               console.error(
                 'Greška pri ažuriranju podataka o kupcu:',
                 updateError
               );
-              toast.error('Greška pri ažuriranju podataka o kupcu');
-              setLoading(false);
-              return;
-            }
-          }
-        } else {
-          // Ako korisnik nije prijavljen, proveravamo da li postoji kupac sa datim email-om
-          if (customerData.email) {
-            const { data: existingCustomer, error: fetchError } =
-              await supabase.rpc('dohvati_kupca_po_email', {
-                p_email: customerData.email
-              });
-
-            if (fetchError) {
-              console.error('Greška pri proveri postojećeg kupca:', fetchError);
-            } else if (existingCustomer && existingCustomer.length > 0) {
-              // Koristimo postojećeg kupca
-              kupacId = existingCustomer[0].id;
-
-              // Ažuriramo podatke o kupcu
-              const { error: updateError } = await supabase
-                .from('kupci')
-                .update({
-                  ime_kupca: customerData.ime_kupca,
-                  prezime_kupca: customerData.prezime_kupca,
-                  adresa: customerData.adresa,
-                  mesto: customerData.mesto,
-                  id_post: customerData.id_post
-                })
-                .eq('id', kupacId);
-
-              if (updateError) {
-                console.error(
-                  'Greška pri ažuriranju podataka o kupcu:',
-                  updateError
-                );
-              }
             }
           }
         }
@@ -202,64 +184,55 @@ export default function CheckoutPage() {
 
           kupacId = newCustomer;
         }
-
-        // Kreiramo porudžbinu
-        const { data: orderId, error: orderError } = await supabase.rpc(
-          'kreiraj_porudzbinu',
-          {
-            p_kupac_id: kupacId,
-            p_ukupna_cena: totalPrice + 390, // Dodajemo cenu dostave
-            p_status: 'nova',
-            p_nacin_placanja: paymentMethod,
-            p_telefon: customerData.telefon
-          }
-        );
-
-        if (orderError) {
-          console.error('Greška pri kreiranju porudžbine:', orderError);
-          toast.error('Greška pri kreiranju porudžbine');
-          setLoading(false);
-          return;
-        }
-
-        // Dodajemo stavke porudžbine
-        for (const item of cart) {
-          const { error: itemError } = await supabase.rpc(
-            'dodaj_stavku_porudzbine',
-            {
-              p_porudzbina_id: orderId,
-              p_proizvod_id: item.id,
-              p_kolicina: item.quantity,
-              p_cena_po_komadu: item.cena
-            }
-          );
-
-          if (itemError) {
-            console.error('Greška pri dodavanju stavke porudžbine:', itemError);
-            // Nastavljamo sa dodavanjem ostalih stavki
-          }
-        }
-
-        // Uspešno kreirana porudžbina
-        toast.success('Porudžbina je uspešno kreirana!');
-        clearCart();
-        // Preusmeravanje na stranicu sa potvrdom
-        // router.push(`/porudzbina/${orderId}`);
-      } catch (error) {
-        console.error('Greška pri obradi porudžbine:', error);
-        toast.error('Došlo je do greške pri obradi porudžbine');
       }
-      */
 
-      // Simuliramo uspešnu porudžbinu
-      setTimeout(() => {
-        toast.success('Porudžbina je uspešno kreirana!');
-        clearCart();
+      // Kreiramo porudžbinu
+      const { data: order, error: orderError } = await supabase
+        .from('porudzbine')
+        .insert({
+          id_kupca: kupacId,
+          cena_ukupno: totalPrice,
+          status_porudzbine: 'Obrada'
+        })
+        .select()
+        .single();
+
+      if (orderError) {
+        console.error('Greška pri kreiranju porudžbine:', orderError);
+        toast.error('Greška pri kreiranju porudžbine');
         setLoading(false);
-      }, 1500);
+        return;
+      }
+
+      // Dodajemo stavke porudžbine
+      const orderItems = cart.map((item) => ({
+        id_porudzbine: order.id,
+        id_proizvoda: item.id,
+        kolicina: item.quantity,
+        cena: item.cena
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('stavke_porudzbine')
+        .insert(orderItems);
+
+      if (itemsError) {
+        console.error('Greška pri dodavanju stavki porudžbine:', itemsError);
+        toast.error('Greška pri dodavanju stavki porudžbine');
+        setLoading(false);
+        return;
+      }
+
+      // Uspešno kreirana porudžbina
+      toast.success('Porudžbina je uspešno kreirana!');
+      clearCart();
+
+      // Preusmeravamo na stranicu sa potvrdom porudžbine
+      window.location.href = `/narudzbine/${order.id}`;
     } catch (error) {
-      console.error('Greška:', error);
-      toast.error('Došlo je do greške');
+      console.error('Greška pri kreiranju porudžbine:', error);
+      toast.error('Došlo je do greške pri kreiranju porudžbine');
+    } finally {
       setLoading(false);
     }
   };

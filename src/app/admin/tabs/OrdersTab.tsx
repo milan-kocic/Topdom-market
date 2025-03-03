@@ -12,7 +12,7 @@ import {
   ChevronUp,
   History
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import { exportToCSV } from '@/lib/utils/csv-export';
 import type { Database } from '@/types/supabase';
@@ -29,9 +29,13 @@ type Order = {
 
 type StavkaPorudzbine = {
   id: string;
-  proizvodi?: {
-    naziv_proizvoda?: string;
-  };
+  proizvodi?:
+    | {
+        naziv_proizvoda?: string;
+      }
+    | {
+        naziv_proizvoda?: string;
+      }[];
 };
 
 type PorudzbinaResponse = {
@@ -39,10 +43,15 @@ type PorudzbinaResponse = {
   kreirano: string;
   status_porudzbine: string;
   cena_ukupno: number;
-  kupci?: {
-    ime_kupca: string;
-    prezime_kupca: string;
-  };
+  kupci?:
+    | {
+        ime_kupca: string;
+        prezime_kupca: string;
+      }
+    | {
+        ime_kupca: string;
+        prezime_kupca: string;
+      }[];
   stavke_porudzbine?: StavkaPorudzbine[];
 };
 
@@ -102,13 +111,22 @@ export default function OrdersTab() {
           status_porudzbine: p.status_porudzbine,
           cena_ukupno: p.cena_ukupno,
           kupac: p.kupci
-            ? `${p.kupci.ime_kupca} ${p.kupci.prezime_kupca}`
+            ? Array.isArray(p.kupci)
+              ? `${p.kupci[0]?.ime_kupca || ''} ${
+                  p.kupci[0]?.prezime_kupca || ''
+                }`
+              : `${p.kupci.ime_kupca} ${p.kupci.prezime_kupca}`
             : 'Nepoznat kupac',
           broj_stavki: p.stavke_porudzbine?.length || 0,
           proizvodi:
             p.stavke_porudzbine
-              ?.map((s) => s.proizvodi?.naziv_proizvoda)
-              .filter(Boolean)
+              ?.map((s) => {
+                if (!s.proizvodi) return '';
+                if (Array.isArray(s.proizvodi)) {
+                  return s.proizvodi[0]?.naziv_proizvoda || '';
+                }
+                return s.proizvodi.naziv_proizvoda || '';
+              })
               .join(', ') || ''
         })
       );

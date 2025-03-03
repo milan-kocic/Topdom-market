@@ -1,9 +1,9 @@
 import React, { ReactNode } from 'react';
-import { TopBar } from '../TopBar';
-import { Navigation } from '../Navigation';
-import { Footer } from '../Footer';
+import TopBar from '../TopBar';
+import Navigation from '../Navigation';
+import Footer from '../Footer';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
-import { useApp } from '../../context/AppContext';
+import { useApp } from '@/lib/context/AppContext';
 import { FullPageLoader } from '../ui/LoadingSpinner';
 
 interface LayoutProps {

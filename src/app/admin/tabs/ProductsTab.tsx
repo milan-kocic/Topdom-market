@@ -19,9 +19,28 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import { exportToCSV } from '@/lib/utils/csv-export';
-import type { Database } from '@/lib/types/database.types';
+import type { Database } from '@/types/supabase';
+import type { StatusDostupnosti } from '@/types';
 
-type Product = Database['public']['Tables']['proizvodi']['Row'];
+type Product = {
+  id: string;
+  sku: string | null;
+  naziv_proizvoda: string;
+  opis: string | null;
+  cena: number;
+  nabavna_cena: number | null;
+  id_kategorije: string;
+  kreirano: string;
+  novi_proizvod: boolean;
+  najprodavaniji_proizvod: boolean;
+  iznenadjenje: boolean;
+  glavna_slika: string;
+  status_dostupnosti: StatusDostupnosti;
+  kategorije?: {
+    naziv_kategorije: string;
+  };
+};
+
 type Category = Database['public']['Tables']['kategorije']['Row'];
 
 interface ProductModalProps {
@@ -38,47 +57,93 @@ function ProductModal({
   onSave
 }: ProductModalProps) {
   const [formData, setFormData] = useState({
+    sku: product?.sku || '',
     naziv_proizvoda: product?.naziv_proizvoda || '',
     opis: product?.opis || '',
     cena: product?.cena || 0,
-    img_url: product?.img_url || '',
-    dostupnost: product?.dostupnost ?? true,
+    nabavna_cena: product?.nabavna_cena || 0,
+    id_kategorije: product?.id_kategorije || categories[0]?.id,
     novi_proizvod: product?.novi_proizvod ?? false,
     najprodavaniji_proizvod: product?.najprodavaniji_proizvod ?? false,
-    id_kategorija: product?.id_kategorija || categories[0]?.id
+    iznenadjenje: product?.iznenadjenje ?? false,
+    status_dostupnosti: product?.status_dostupnosti || 'na_stanju'
   });
+
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    console.log('Pokušavam da sačuvam proizvod sa formData:', formData);
+    console.log('Status dostupnosti:', formData.status_dostupnosti);
 
     try {
       if (product?.id) {
         // Update existing product
-        const { error } = await supabase
+        console.log('Ažuriram postojeći proizvod:', product.id);
+        console.log('Podaci za ažuriranje:', formData);
+        const { data, error } = await supabase
           .from('proizvodi')
           .update(formData)
-          .eq('id', product.id);
+          .eq('id', product.id)
+          .select();
 
-        if (error) throw error;
+        if (error) {
+          console.error(
+            'Supabase error:',
+            error.message,
+            error.details,
+            error.hint
+          );
+          throw error;
+        }
+        console.log('Proizvod uspešno ažuriran:', data);
         toast.success('Proizvod uspešno ažuriran');
       } else {
         // Create new product
-        const { error } = await supabase.from('proizvodi').insert([formData]);
+        console.log('Kreiram novi proizvod');
+        console.log('Podaci za kreiranje:', formData);
+        const { data, error } = await supabase
+          .from('proizvodi')
+          .insert([formData])
+          .select();
 
-        if (error) throw error;
+        if (error) {
+          console.error(
+            'Supabase error:',
+            error.message,
+            error.details,
+            error.hint
+          );
+          throw error;
+        }
+        console.log('Proizvod uspešno kreiran:', data);
         toast.success('Proizvod uspešno kreiran');
       }
 
       onSave();
       onClose();
-    } catch (error) {
-      console.error('Error saving product:', error);
-      toast.error('Greška pri čuvanju proizvoda');
+    } catch (error: any) {
+      console.error('Error saving product:', {
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        formData
+      });
+      toast.error(
+        `Greška pri čuvanju proizvoda: ${error?.message || 'Nepoznata greška'}`
+      );
     }
   }
 
   return (
-    <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50'>
+    <div
+      className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50'
+      onClick={handleBackdropClick}
+    >
       <div className='bg-white rounded-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto'>
         <div className='flex justify-between items-center mb-6'>
           <h2 className='text-2xl font-bold'>
@@ -95,6 +160,22 @@ function ProductModal({
         </div>
 
         <form onSubmit={handleSubmit} className='space-y-4'>
+          <div>
+            <label className='block text-sm font-medium text-gray-700 mb-1'>
+              SKU
+            </label>
+            <input
+              type='text'
+              value={formData.sku}
+              onChange={(e) =>
+                setFormData({ ...formData, sku: e.target.value })
+              }
+              className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent'
+              required
+              aria-label='SKU proizvoda'
+            />
+          </div>
+
           <div>
             <label className='block text-sm font-medium text-gray-700 mb-1'>
               Naziv proizvoda
@@ -116,9 +197,9 @@ function ProductModal({
               Kategorija
             </label>
             <select
-              value={formData.id_kategorija}
+              value={formData.id_kategorije}
               onChange={(e) =>
-                setFormData({ ...formData, id_kategorija: e.target.value })
+                setFormData({ ...formData, id_kategorije: e.target.value })
               }
               className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent'
               required
@@ -148,58 +229,48 @@ function ProductModal({
             />
           </div>
 
-          <div>
-            <label className='block text-sm font-medium text-gray-700 mb-1'>
-              Cena (RSD)
-            </label>
-            <input
-              type='number'
-              value={formData.cena}
-              onChange={(e) =>
-                setFormData({ ...formData, cena: parseFloat(e.target.value) })
-              }
-              className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent'
-              required
-              min='0'
-              step='0.01'
-              aria-label='Cena proizvoda'
-            />
-          </div>
-
-          <div>
-            <label className='block text-sm font-medium text-gray-700 mb-1'>
-              URL slike
-            </label>
-            <input
-              type='url'
-              value={formData.img_url}
-              onChange={(e) =>
-                setFormData({ ...formData, img_url: e.target.value })
-              }
-              className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent'
-              aria-label='URL slike proizvoda'
-            />
-          </div>
-
-          <div className='flex flex-col sm:flex-row sm:items-center space-y-4 sm:space-y-0 sm:space-x-6'>
-            <div className='flex items-center'>
-              <input
-                type='checkbox'
-                id='dostupnost'
-                checked={formData.dostupnost}
-                onChange={(e) =>
-                  setFormData({ ...formData, dostupnost: e.target.checked })
-                }
-                className='h-4 w-4 text-yellow-400 focus:ring-yellow-400 border-gray-300 rounded'
-              />
-              <label
-                htmlFor='dostupnost'
-                className='ml-2 block text-sm text-gray-700'
-              >
-                Proizvod je dostupan
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+            <div>
+              <label className='block text-sm font-medium text-gray-700 mb-1'>
+                Prodajna cena (RSD)
               </label>
+              <input
+                type='number'
+                value={formData.cena}
+                onChange={(e) =>
+                  setFormData({ ...formData, cena: parseFloat(e.target.value) })
+                }
+                className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent'
+                required
+                min='0'
+                step='0.01'
+                aria-label='Prodajna cena proizvoda'
+              />
             </div>
 
+            <div>
+              <label className='block text-sm font-medium text-gray-700 mb-1'>
+                Nabavna cena (RSD)
+              </label>
+              <input
+                type='number'
+                value={formData.nabavna_cena}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    nabavna_cena: parseFloat(e.target.value)
+                  })
+                }
+                className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent'
+                required
+                min='0'
+                step='0.01'
+                aria-label='Nabavna cena proizvoda'
+              />
+            </div>
+          </div>
+
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
             <div className='flex items-center'>
               <input
                 type='checkbox'
@@ -238,6 +309,50 @@ function ProductModal({
                 Najprodavaniji proizvod
               </label>
             </div>
+
+            <div className='flex items-center'>
+              <input
+                type='checkbox'
+                id='iznenadjenje'
+                checked={formData.iznenadjenje}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    iznenadjenje: e.target.checked
+                  })
+                }
+                className='h-4 w-4 text-yellow-400 focus:ring-yellow-400 border-gray-300 rounded'
+              />
+              <label
+                htmlFor='iznenadjenje'
+                className='ml-2 block text-sm text-gray-700'
+              >
+                Iznenađenje
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label className='block text-sm font-medium text-gray-700 mb-1'>
+              Status dostupnosti
+            </label>
+            <select
+              value={formData.status_dostupnosti}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  status_dostupnosti: e.target.value as StatusDostupnosti
+                })
+              }
+              className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent'
+              aria-label='Status dostupnosti proizvoda'
+            >
+              <option value='na_stanju'>Na stanju</option>
+              <option value='rasprodato'>Rasprodato</option>
+              <option value='uskoro'>Uskoro</option>
+              <option value='po_porudzbini'>Po porudžbini</option>
+              <option value='poslednji_primerak'>Poslednji primerak</option>
+            </select>
           </div>
 
           <div className='flex justify-end space-x-4 mt-6'>
@@ -250,9 +365,9 @@ function ProductModal({
             </button>
             <button
               type='submit'
-              className='px-6 py-2 bg-yellow-400 text-black rounded-lg hover:bg-yellow-300 transition-colors'
+              className='px-6 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors'
             >
-              Sačuvaj
+              {product?.id ? 'Sačuvaj izmene' : 'Dodaj proizvod'}
             </button>
           </div>
         </form>
@@ -272,6 +387,12 @@ function CategoryModal({ onClose, onSave }: CategoryModalProps) {
     opis_kategorije: ''
   });
 
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -289,7 +410,10 @@ function CategoryModal({ onClose, onSave }: CategoryModalProps) {
   }
 
   return (
-    <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50'>
+    <div
+      className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50'
+      onClick={handleBackdropClick}
+    >
       <div className='bg-white rounded-xl max-w-md w-full p-6'>
         <div className='flex justify-between items-center mb-6'>
           <h2 className='text-2xl font-bold'>Nova kategorija</h2>
@@ -378,10 +502,11 @@ export default function ProductsTab() {
   async function fetchProducts() {
     try {
       const { data, error } = await supabase
-        .from('proizvodi')
-        .select('*, kategorije(naziv_kategorije)');
+        .from('v_proizvodi_detalji')
+        .select('*');
 
       if (error) throw error;
+      console.log('Dohvaćeni proizvodi sa statusima:', data);
       setProducts(data || []);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -443,13 +568,21 @@ export default function ProductsTab() {
     try {
       const productsForExport = products.map((product) => ({
         ID: product.id,
-        Naziv: product.naziv_proizvoda,
-        Opis: product.opis,
-        Cena: product.cena,
-        Kategorija: (product.kategorije as any)?.naziv_kategorije || '',
-        Dostupnost: product.dostupnost ? 'Da' : 'Ne',
+        SKU: product.sku || '',
+        'Naziv proizvoda': product.naziv_proizvoda,
+        Opis: product.opis || '',
+        'Prodajna cena': product.cena,
+        'Nabavna cena': product.nabavna_cena || 0,
+        Kategorija: product.kategorije?.naziv_kategorije || '',
+        Dostupnost: product.status_dostupnosti,
         'Novi proizvod': product.novi_proizvod ? 'Da' : 'Ne',
-        Najprodavaniji: product.najprodavaniji_proizvod ? 'Da' : 'Ne'
+        'Najprodavaniji proizvod': product.najprodavaniji_proizvod
+          ? 'Da'
+          : 'Ne',
+        Iznenađenje: product.iznenadjenje ? 'Da' : 'Ne',
+        'Datum kreiranja': new Date(product.kreirano).toLocaleDateString(
+          'sr-RS'
+        )
       }));
 
       exportToCSV(productsForExport, 'proizvodi');
@@ -465,8 +598,9 @@ export default function ProductsTab() {
       product.naziv_proizvoda
         .toLowerCase()
         .includes(searchQuery.toLowerCase()) ||
-      product.opis.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = !filterAvailable || product.dostupnost;
+      (product.opis?.toLowerCase() || '').includes(searchQuery.toLowerCase());
+    const matchesFilter =
+      !filterAvailable || product.status_dostupnosti !== 'rasprodato';
     return matchesSearch && matchesFilter;
   });
 
@@ -570,9 +704,9 @@ export default function ProductsTab() {
                 <div className='p-4'>
                   <div className='flex items-start justify-between'>
                     <div className='flex items-start space-x-4'>
-                      {product.img_url && (
+                      {product.glavna_slika && (
                         <img
-                          src={product.img_url}
+                          src={product.glavna_slika}
                           alt={product.naziv_proizvoda}
                           className='w-16 h-16 object-cover rounded-lg'
                         />
@@ -586,23 +720,60 @@ export default function ProductsTab() {
                         </p>
                         <div className='flex items-center space-x-2 mt-2'>
                           <span className='text-lg font-semibold'>
-                            {product.cena} RSD
+                            {product.cena.toLocaleString('sr-RS')} RSD
                           </span>
-                          {product.dostupnost ? (
-                            <span className='px-2 py-1 text-xs font-medium text-green-700 bg-green-50 rounded-full'>
-                              Dostupno
-                            </span>
-                          ) : (
-                            <span className='px-2 py-1 text-xs font-medium text-red-700 bg-red-50 rounded-full'>
-                              Nije dostupno
-                            </span>
-                          )}
-                          {product.novi_proizvod && (
-                            <span className='px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 rounded-full'>
-                              Novo
-                            </span>
-                          )}
+                          {getStatusBadge(product.status_dostupnosti)}
                         </div>
+
+                        {expandedProducts.has(product.id) && (
+                          <div className='mt-4 space-y-3 text-sm'>
+                            <div className='grid grid-cols-2 gap-4'>
+                              <div>
+                                <p className='text-gray-500'>SKU</p>
+                                <p className='font-medium'>
+                                  {product.sku || 'Nije definisan'}
+                                </p>
+                              </div>
+                              <div>
+                                <p className='text-gray-500'>Nabavna cena</p>
+                                <p className='font-medium'>
+                                  {product.nabavna_cena?.toLocaleString(
+                                    'sr-RS'
+                                  )}{' '}
+                                  RSD
+                                </p>
+                              </div>
+                            </div>
+
+                            <div>
+                              <p className='text-gray-500'>Datum kreiranja</p>
+                              <p className='font-medium'>
+                                {new Date(product.kreirano).toLocaleDateString(
+                                  'sr-RS'
+                                )}
+                              </p>
+                            </div>
+
+                            <div className='flex gap-4'>
+                              {product.glavna_slika && (
+                                <div className='flex-shrink-0'>
+                                  <p className='text-gray-500 mb-1'>Slika</p>
+                                  <img
+                                    src={product.glavna_slika}
+                                    alt={product.naziv_proizvoda}
+                                    className='w-24 h-24 object-cover rounded-lg border border-gray-200'
+                                  />
+                                </div>
+                              )}
+                              <div className='flex-1'>
+                                <p className='text-gray-500'>Opis</p>
+                                <p className='font-medium'>
+                                  {product.opis || 'Nema opisa'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -721,5 +892,43 @@ export default function ProductsTab() {
         />
       )}
     </div>
+  );
+}
+
+function getStatusBadge(status: StatusDostupnosti) {
+  const badges = {
+    na_stanju: {
+      text: 'Na stanju',
+      classes: 'bg-green-100 text-green-800'
+    },
+    rasprodato: {
+      text: 'Rasprodato',
+      classes: 'bg-red-100 text-red-800'
+    },
+    uskoro: {
+      text: 'Uskoro',
+      classes: 'bg-blue-100 text-blue-800'
+    },
+    po_porudzbini: {
+      text: 'Po porudžbini',
+      classes: 'bg-purple-100 text-purple-800'
+    },
+    poslednji_primerak: {
+      text: 'Poslednji primerak',
+      classes: 'bg-orange-100 text-orange-800'
+    }
+  } as const;
+
+  const badge = badges[status] || {
+    text: status,
+    classes: 'bg-gray-100 text-gray-800'
+  };
+
+  return (
+    <span
+      className={`px-2 py-1 rounded-full text-xs font-medium ${badge.classes}`}
+    >
+      {badge.text}
+    </span>
   );
 }

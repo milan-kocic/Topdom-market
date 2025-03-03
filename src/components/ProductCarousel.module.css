@@ -1,0 +1,12 @@
+.carouselItem {
+  width: 25%;
+}
+
+.carouselTrack {
+  display: flex;
+  transition: transform 300ms ease-in-out;
+}
+
+.carouselTrack[data-translate-x] {
+  transform: translateX(attr(data-translate-x percentage));
+}

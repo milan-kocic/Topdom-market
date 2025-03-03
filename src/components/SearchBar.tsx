@@ -6,9 +6,7 @@ import { useProducts } from '@/lib/hooks/use-products';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/auth-context';
-import type { Database } from '@/lib/types/database.types';
-
-type Product = Database['public']['Tables']['proizvodi']['Row'];
+import { ProizvodDetalji } from '@/types';
 
 export default function SearchBar() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -20,11 +18,11 @@ export default function SearchBar() {
 
   // Filter products based on search query
   const filteredProducts = products
-    ?.filter((product) => {
+    ?.filter((product: ProizvodDetalji) => {
       const searchLower = searchQuery.toLowerCase();
       return (
         product.naziv_proizvoda.toLowerCase().includes(searchLower) ||
-        product.opis.toLowerCase().includes(searchLower)
+        (product.opis && product.opis.toLowerCase().includes(searchLower))
       );
     })
     .slice(0, 5);
@@ -48,7 +46,7 @@ export default function SearchBar() {
     setShowResults(true);
   };
 
-  const handleProductSelect = (product: Product) => {
+  const handleProductSelect = (product: ProizvodDetalji) => {
     setSearchQuery('');
     setShowResults(false);
     router.push(`/proizvod/${product.id}`);
@@ -72,78 +70,74 @@ export default function SearchBar() {
             {!user ? (
               <>
                 <Link
-                  href='/register'
-                  className='flex items-center space-x-2 text-sm hover:text-yellow-500 transition-all duration-200 px-3 py-2 rounded-lg hover:bg-white'
+                  href='/login'
+                  className='flex items-center space-x-1 text-sm hover:text-yellow-500 transition-colors'
                 >
-                  <UserPlus className='h-5 w-5' />
-                  <span>Registracija</span>
+                  <LogIn className='h-4 w-4' />
+                  <span>Prijava</span>
                 </Link>
                 <Link
-                  href='/login'
-                  className='flex items-center space-x-2 text-sm hover:text-yellow-500 transition-all duration-200 px-3 py-2 rounded-lg hover:bg-white'
+                  href='/register'
+                  className='flex items-center space-x-1 text-sm hover:text-yellow-500 transition-colors'
                 >
-                  <LogIn className='h-5 w-5' />
-                  <span>Prijava</span>
+                  <UserPlus className='h-4 w-4' />
+                  <span>Registracija</span>
                 </Link>
               </>
             ) : (
-              <>
+              <div className='flex items-center space-x-4'>
                 {isAdmin && (
                   <Link
                     href='/admin'
-                    className='flex items-center space-x-2 text-sm hover:text-yellow-500 transition-all duration-200 px-3 py-2 rounded-lg hover:bg-white'
+                    className='flex items-center space-x-1 text-sm hover:text-yellow-500 transition-colors'
                   >
-                    <User className='h-5 w-5' />
-                    <span>Admin Panel</span>
+                    <User className='h-4 w-4' />
+                    <span>Admin</span>
                   </Link>
                 )}
                 <button
                   onClick={handleSignOut}
-                  className='flex items-center space-x-2 text-sm hover:text-yellow-500 transition-all duration-200 px-3 py-2 rounded-lg hover:bg-white'
+                  className='flex items-center space-x-1 text-sm hover:text-yellow-500 transition-colors'
                 >
-                  <LogOut className='h-5 w-5' />
-                  <span>Odjavi se</span>
+                  <LogOut className='h-4 w-4' />
+                  <span>Odjava</span>
                 </button>
-              </>
+              </div>
             )}
           </div>
 
-          {/* Centered search */}
-          <div className='flex-1 max-w-md mx-auto' ref={searchRef}>
-            <div className='relative group'>
+          {/* Center - Search */}
+          <div className='flex-1 max-w-xl relative' ref={searchRef}>
+            <div className='relative'>
               <input
-                type='search'
-                placeholder='Pretraga proizvoda...'
+                type='text'
+                placeholder='Pretraži proizvode...'
+                className='w-full py-2 pl-10 pr-4 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent'
                 value={searchQuery}
                 onChange={handleSearchChange}
-                className='w-full px-4 py-2 pl-10 bg-white rounded-full text-sm border border-gray-200 shadow-sm 
-                  focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent
-                  group-hover:shadow-md transition-all duration-200'
+                onFocus={() => setShowResults(true)}
               />
-              <Search
-                className='h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 
-                group-hover:text-yellow-500 transition-colors duration-200'
-              />
+              <Search className='absolute left-3 top-2.5 h-5 w-5 text-gray-400' />
             </div>
 
-            {showResults && searchQuery && (
-              <div
-                className='absolute mt-2 w-full bg-white rounded-lg shadow-lg z-[100] max-h-96 overflow-y-auto 
-                border border-gray-100 transform transition-all duration-200 scale-100 origin-top'
-              >
+            {/* Search Results Dropdown */}
+            {showResults && searchQuery.length > 0 && (
+              <div className='absolute z-20 mt-2 w-full bg-white rounded-lg shadow-lg overflow-hidden'>
                 {loading ? (
-                  <div className='p-4 text-gray-500'>Pretraživanje...</div>
+                  <div className='p-4 text-gray-500'>Učitavanje...</div>
                 ) : filteredProducts && filteredProducts.length > 0 ? (
                   <div className='py-2'>
                     {filteredProducts.map((product) => (
                       <button
                         key={product.id}
-                        onClick={() => handleProductSelect(product)}
+                        onClick={() =>
+                          handleProductSelect(product as ProizvodDetalji)
+                        }
                         className='w-full px-4 py-2 text-left hover:bg-yellow-50 flex items-center space-x-3 transition-colors duration-200'
                       >
-                        {product.img_url && (
+                        {product.glavna_slika && (
                           <img
-                            src={product.img_url}
+                            src={product.glavna_slika}
                             alt={product.naziv_proizvoda}
                             className='w-12 h-12 object-cover rounded'
                           />

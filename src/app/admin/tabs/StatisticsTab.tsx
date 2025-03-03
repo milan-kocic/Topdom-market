@@ -124,7 +124,15 @@ export default function StatisticsTab() {
       // Fetch total customers for selected period
       const { data: customers, error: customersError } = await supabase
         .from('porudzbine')
-        .select('kupac_ime, kupac_prezime')
+        .select(
+          `
+          id_kupca,
+          kupci (
+            ime_kupca,
+            prezime_kupca
+          )
+        `
+        )
         .gte('kreirano', stats.dateRange.startDate)
         .lte('kreirano', stats.dateRange.endDate + ' 23:59:59');
 
@@ -140,7 +148,16 @@ export default function StatisticsTab() {
 
       // Računamo jedinstvene kupce po imenu i prezimenu
       const uniqueCustomers = new Set(
-        customers?.map((c) => `${c.kupac_ime} ${c.kupac_prezime}`)
+        customers?.map((c) => {
+          const kupci = c.kupci as any;
+          if (!kupci) return 'Nepoznat kupac';
+          if (Array.isArray(kupci)) {
+            return `${kupci[0]?.ime_kupca || ''} ${
+              kupci[0]?.prezime_kupca || ''
+            }`;
+          }
+          return `${kupci.ime_kupca} ${kupci.prezime_kupca}`;
+        })
       );
 
       console.log('Uspešno dohvaćeni kupci:', {
@@ -148,9 +165,9 @@ export default function StatisticsTab() {
       });
 
       // Fetch total products
-      const { count: productsCount, error: productsError } = await supabase
+      const { data: productsData, error: productsError } = await supabase
         .from('proizvodi')
-        .select('id', { count: 'exact', head: true });
+        .select('id');
 
       if (productsError) {
         console.error('Greška pri dohvatanju proizvoda:', {
@@ -162,9 +179,7 @@ export default function StatisticsTab() {
         throw productsError;
       }
 
-      console.log('Uspešno dohvaćeni proizvodi:', {
-        ukupnoProizvoda: productsCount
-      });
+      const productsCount = productsData ? productsData.length : 0;
 
       // Calculate total revenue for period
       const totalRevenue =
@@ -200,8 +215,10 @@ export default function StatisticsTab() {
           cena_ukupno,
           status_porudzbine,
           kreirano,
-          kupac_ime,
-          kupac_prezime
+          kupci (
+            ime_kupca,
+            prezime_kupca
+          )
         `
         )
         .gte('kreirano', stats.dateRange.startDate)
@@ -226,13 +243,27 @@ export default function StatisticsTab() {
 
       // Transform recent orders
       const transformedRecentOrders =
-        recentOrders?.map((order) => ({
-          ...order,
-          kupci: {
-            ime_kupca: order.kupac_ime,
-            prezime_kupca: order.kupac_prezime
+        recentOrders?.map((order) => {
+          const kupci = order.kupci as any;
+          let kupac_ime = '';
+          let kupac_prezime = '';
+
+          if (kupci) {
+            if (Array.isArray(kupci)) {
+              kupac_ime = kupci[0]?.ime_kupca || '';
+              kupac_prezime = kupci[0]?.prezime_kupca || '';
+            } else {
+              kupac_ime = kupci.ime_kupca;
+              kupac_prezime = kupci.prezime_kupca;
+            }
           }
-        })) || [];
+
+          return {
+            ...order,
+            kupac_ime,
+            kupac_prezime
+          };
+        }) || [];
 
       setStats((prev) => ({
         ...prev,
@@ -386,7 +417,7 @@ export default function StatisticsTab() {
         })),
         nedavne_porudzbine: stats.recentOrders.map((order) => ({
           id: order.id,
-          kupac: `${order.kupci.ime_kupca} ${order.kupci.prezime_kupca}`,
+          kupac: `${order.kupac_ime} ${order.kupac_prezime}`,
           iznos: `${order.cena_ukupno} RSD`,
           status: order.status_porudzbine,
           datum: new Date(order.kreirano).toLocaleDateString('sr-RS')
@@ -526,7 +557,7 @@ export default function StatisticsTab() {
                 <div>
                   <p className='font-medium'>Porudžbina #{order.id}</p>
                   <p className='text-sm text-gray-500'>
-                    {order.kupci.ime_kupca} {order.kupci.prezime_kupca}
+                    {order.kupac_ime} {order.kupac_prezime}
                   </p>
                   <p className='text-sm text-gray-500'>
                     {new Date(order.kreirano).toLocaleDateString('sr-RS')}

@@ -42,6 +42,8 @@ export type Database = {
           nabavna_cena: number;
           id_kategorije: string;
           kreirano: string;
+          novi_proizvod: boolean;
+          najprodavaniji_proizvod: boolean;
         };
         Insert: Omit<
           Database['public']['Tables']['proizvodi']['Row'],

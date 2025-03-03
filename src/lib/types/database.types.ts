@@ -12,30 +12,36 @@ export interface Database {
       kupci: {
         Row: {
           id: string;
-          ime: string;
-          prezime: string;
+          ime_kupca: string;
+          prezime_kupca: string;
           email: string;
-          telefon: string;
-          adresa: string;
-          created_at: string;
+          adresa?: string;
+          mesto?: string;
+          id_post?: string;
+          status: 'registrovan' | 'neregistrovan' | 'administrator';
+          kreirano?: string;
         };
         Insert: {
           id?: string;
-          ime: string;
-          prezime: string;
-          email: string;
-          telefon: string;
-          adresa: string;
-          created_at?: string;
+          ime_kupca: string;
+          prezime_kupca: string;
+          email?: string;
+          adresa?: string;
+          mesto?: string;
+          id_post?: string;
+          status?: 'registrovan' | 'neregistrovan' | 'administrator';
+          kreirano?: string;
         };
         Update: {
           id?: string;
-          ime?: string;
-          prezime?: string;
+          ime_kupca?: string;
+          prezime_kupca?: string;
           email?: string;
-          telefon?: string;
           adresa?: string;
-          created_at?: string;
+          mesto?: string;
+          id_post?: string;
+          status?: 'registrovan' | 'neregistrovan' | 'administrator';
+          kreirano?: string;
         };
       };
       proizvodi: {
@@ -50,6 +56,8 @@ export interface Database {
           najprodavaniji_proizvod: boolean;
           id_kategorija: string;
           created_at: string;
+          sku: string | null;
+          nabavna_cena: number | null;
           kategorije?: {
             naziv_kategorije: string;
           };
@@ -65,6 +73,8 @@ export interface Database {
           najprodavaniji_proizvod?: boolean;
           id_kategorija: string;
           created_at?: string;
+          sku?: string;
+          nabavna_cena?: number;
         };
         Update: {
           id?: string;
@@ -77,6 +87,8 @@ export interface Database {
           najprodavaniji_proizvod?: boolean;
           id_kategorija?: string;
           created_at?: string;
+          sku?: string;
+          nabavna_cena?: number;
         };
       };
       kategorije: {

@@ -1,9 +1,25 @@
 import { useCallback } from 'react';
-import { useApp } from '../context/AppContext';
-import { Proizvod, ProizvodDetalji } from '../types';
-import * as proizvodiService from '../lib/services/proizvodi.service';
+import { useApp } from '@/lib/context/AppContext';
+import { Proizvod, ProizvodDetalji } from '@/types';
+import * as proizvodiService from '@/lib/services/proizvodi.service';
 
-export function useProducts() {
+interface UseProductsReturn {
+  products: ProizvodDetalji[];
+  cart: any[];
+  loading: Record<string, string>;
+  error: any;
+  fetchProducts: () => Promise<void>;
+  fetchNewProducts: () => Promise<ProizvodDetalji[]>;
+  fetchBestSellers: () => Promise<ProizvodDetalji[]>;
+  fetchSurprises: () => Promise<ProizvodDetalji[]>;
+  getProductById: (id: string) => Promise<ProizvodDetalji | null>;
+  searchProducts: (query: string) => Promise<ProizvodDetalji[]>;
+  addToCart: (product: Proizvod, quantity?: number) => void;
+  removeFromCart: (productId: string) => void;
+  updateCartQuantity: (productId: string, quantity: number) => void;
+}
+
+export function useProducts(): UseProductsReturn {
   const { state, dispatch } = useApp();
 
   const fetchProducts = useCallback(async () => {
@@ -32,6 +48,102 @@ export function useProducts() {
         type: 'SET_LOADING',
         payload: { key: 'products', state: 'error' }
       });
+    }
+  }, [dispatch]);
+
+  const fetchNewProducts = useCallback(async () => {
+    try {
+      console.log('fetchNewProducts: Započinjem dohvatanje novih proizvoda...');
+      dispatch({
+        type: 'SET_LOADING',
+        payload: { key: 'new-products', state: 'loading' }
+      });
+
+      const products = await proizvodiService.getNoviProizvodi();
+      console.log('fetchNewProducts: Dohvaćeni novi proizvodi:', products);
+
+      dispatch({
+        type: 'SET_LOADING',
+        payload: { key: 'new-products', state: 'success' }
+      });
+      return products;
+    } catch (error) {
+      console.error('fetchNewProducts: Greška:', error);
+      dispatch({
+        type: 'SET_ERROR',
+        payload: {
+          message: 'Greška pri učitavanju novih proizvoda.',
+          code: 'NEW_PRODUCTS_FETCH_ERROR'
+        }
+      });
+      dispatch({
+        type: 'SET_LOADING',
+        payload: { key: 'new-products', state: 'error' }
+      });
+      return [];
+    }
+  }, [dispatch]);
+
+  const fetchBestSellers = useCallback(async () => {
+    try {
+      dispatch({
+        type: 'SET_LOADING',
+        payload: { key: 'best-sellers', state: 'loading' }
+      });
+
+      const products = await proizvodiService.getNajprodavanijiProizvodi();
+
+      dispatch({
+        type: 'SET_LOADING',
+        payload: { key: 'best-sellers', state: 'success' }
+      });
+      return products;
+    } catch (error) {
+      dispatch({
+        type: 'SET_ERROR',
+        payload: {
+          message: 'Greška pri učitavanju najprodavanijih proizvoda.',
+          code: 'BEST_SELLERS_FETCH_ERROR'
+        }
+      });
+      dispatch({
+        type: 'SET_LOADING',
+        payload: { key: 'best-sellers', state: 'error' }
+      });
+      return [];
+    }
+  }, [dispatch]);
+
+  const fetchSurprises = useCallback(async () => {
+    try {
+      console.log('fetchSurprises: Započinjem dohvatanje iznenađenja...');
+      dispatch({
+        type: 'SET_LOADING',
+        payload: { key: 'surprises', state: 'loading' }
+      });
+
+      const products = await proizvodiService.getIznenadjenja();
+      console.log('fetchSurprises: Dohvaćena iznenađenja:', products);
+
+      dispatch({
+        type: 'SET_LOADING',
+        payload: { key: 'surprises', state: 'success' }
+      });
+      return products;
+    } catch (error) {
+      console.error('fetchSurprises: Greška:', error);
+      dispatch({
+        type: 'SET_ERROR',
+        payload: {
+          message: 'Greška pri učitavanju iznenađenja.',
+          code: 'SURPRISES_FETCH_ERROR'
+        }
+      });
+      dispatch({
+        type: 'SET_LOADING',
+        payload: { key: 'surprises', state: 'error' }
+      });
+      return [];
     }
   }, [dispatch]);
 
@@ -105,9 +217,26 @@ export function useProducts() {
 
   const addToCart = useCallback(
     (product: Proizvod, quantity: number = 1) => {
+      const cartItem: ProizvodDetalji & { quantity: number } = {
+        id: product.id,
+        sku: product.sku,
+        naziv_proizvoda: product.naziv_proizvoda,
+        opis: product.opis,
+        cena: product.cena,
+        nabavna_cena: product.nabavna_cena,
+        id_kategorije: product.id_kategorija,
+        kreirano: product.kreirano,
+        novi_proizvod: product.novi_proizvod,
+        najprodavaniji_proizvod: product.najprodavaniji_proizvod,
+        status_dostupnosti: product.status_dostupnosti,
+        naziv_kategorije: '',
+        glavna_slika: product.img_url,
+        quantity
+      };
+
       dispatch({
         type: 'ADD_TO_CART',
-        payload: { ...product, quantity }
+        payload: cartItem
       });
     },
     [dispatch]
@@ -133,9 +262,12 @@ export function useProducts() {
   return {
     products: state.products,
     cart: state.cart,
-    isLoading: state.loading.products === 'loading',
+    loading: state.loading,
     error: state.error,
     fetchProducts,
+    fetchNewProducts,
+    fetchBestSellers,
+    fetchSurprises,
     getProductById,
     searchProducts,
     addToCart,

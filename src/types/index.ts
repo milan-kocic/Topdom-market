@@ -18,15 +18,27 @@ export interface Kategorija {
   kreirano: Date;
 }
 
+export type StatusDostupnosti =
+  | 'na_stanju'
+  | 'rasprodato'
+  | 'uskoro'
+  | 'po_porudzbini'
+  | 'poslednji_primerak';
+
 export interface Proizvod {
   id: string;
-  sku: string;
+  sku: string | null;
   naziv_proizvoda: string;
   opis: string | null;
   cena: number;
-  nabavna_cena: number;
-  id_kategorije: string;
+  nabavna_cena: number | null;
+  id_kategorija: string;
   kreirano: Date;
+  novi_proizvod: boolean;
+  najprodavaniji_proizvod: boolean;
+  iznenadjenje: boolean;
+  img_url: string;
+  status_dostupnosti: StatusDostupnosti;
 }
 
 export interface ProizvodSlika {
@@ -71,7 +83,19 @@ export interface Trosak {
 }
 
 // View Types
-export interface ProizvodDetalji extends Proizvod {
+export interface ProizvodDetalji {
+  id: string;
+  sku: string | null;
+  naziv_proizvoda: string;
+  opis: string | null;
+  cena: number;
+  nabavna_cena: number | null;
+  id_kategorije: string;
+  kreirano: Date;
+  novi_proizvod: boolean;
+  najprodavaniji_proizvod: boolean;
+  iznenadjenje: boolean;
+  status_dostupnosti: StatusDostupnosti;
   naziv_kategorije: string;
   glavna_slika: string | null;
 }

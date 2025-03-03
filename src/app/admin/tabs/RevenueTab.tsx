@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Search, Download, Calendar, TrendingUp, Package } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import { exportToCSV } from '@/lib/utils/csv-export';
 import type { Database } from '@/types/supabase';
@@ -262,6 +262,39 @@ export default function RevenueTab() {
           </p>
         </div>
         <div className='flex items-center gap-2'>
+          <div className='flex items-center gap-2 bg-white border border-gray-200 rounded-lg p-2'>
+            <div className='flex items-center gap-2'>
+              <label htmlFor='startDate' className='text-sm text-gray-600'>
+                Od:
+              </label>
+              <input
+                id='startDate'
+                type='date'
+                value={dateFilter.startDate}
+                onChange={(e) =>
+                  setDateFilter({ ...dateFilter, startDate: e.target.value })
+                }
+                title='Početni datum'
+                className='px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-yellow-400 focus:border-transparent'
+              />
+            </div>
+            <div className='flex items-center gap-2'>
+              <label htmlFor='endDate' className='text-sm text-gray-600'>
+                Do:
+              </label>
+              <input
+                id='endDate'
+                type='date'
+                value={dateFilter.endDate}
+                onChange={(e) =>
+                  setDateFilter({ ...dateFilter, endDate: e.target.value })
+                }
+                title='Krajnji datum'
+                className='px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-yellow-400 focus:border-transparent'
+              />
+            </div>
+          </div>
+          <div className='h-6 border-l border-gray-300'></div>
           <button
             onClick={() => handleQuickRange(7)}
             className='px-3 py-1 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50'

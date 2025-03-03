@@ -1,8 +1,14 @@
 import Image from 'next/image';
-import { Product } from '@/types';
+import { Proizvod } from '@/types';
 
 interface ProductCardProps {
-  product: Product;
+  product: {
+    id: string;
+    name: string;
+    description: string;
+    price: number;
+    imageUrl: string;
+  };
   onAddToCart: (productId: string) => void;
 }
 

@@ -2,12 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import {
-  PlusCircle,
-  Pencil,
-  Trash2,
-  Star,
-  StarOff,
-  Filter,
   User,
   Mail,
   Calendar,
@@ -24,17 +18,22 @@ import {
   Menu,
   X,
   Wallet,
-  CreditCard
+  CreditCard,
+  Home,
+  Settings
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
-import type { Database } from '@/lib/types/database.types';
+import { useAuth } from '@/lib/auth/auth-context';
+import { useRouter } from 'next/navigation';
 import ProductsTab from './tabs/ProductsTab';
 import OrdersTab from './tabs/OrdersTab';
 import CustomersTab from './tabs/CustomersTab';
 import StatisticsTab from './tabs/StatisticsTab';
 import ExpensesTab from './tabs/ExpensesTab';
 import RevenueTab from './tabs/RevenueTab';
+import UsersTab from './tabs/UsersTab';
+import SettingsTab from './tabs/SettingsTab';
 
 type TabType =
   | 'products'
@@ -42,18 +41,20 @@ type TabType =
   | 'customers'
   | 'statistics'
   | 'revenue'
-  | 'expenses';
+  | 'expenses'
+  | 'users'
+  | 'settings';
 
 interface Statistics {
   totalOrders: number;
   totalCustomers: number;
   totalRevenue: number;
   totalProducts: number;
-  recentOrders: any[];
-  topProducts: any[];
 }
 
 export default function AdminDashboard() {
+  const { signOut } = useAuth();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>('products');
   const [adminInfo, setAdminInfo] = useState<any>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -61,16 +62,43 @@ export default function AdminDashboard() {
     totalOrders: 0,
     totalCustomers: 0,
     totalRevenue: 0,
-    totalProducts: 0,
-    recentOrders: [],
-    topProducts: []
+    totalProducts: 0
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchAdminInfo();
     fetchStatistics();
+
+    // Postavi aktivni tab na osnovu URL parametra
+    const searchParams = new URLSearchParams(window.location.search);
+    const tab = searchParams.get('tab') as TabType | null;
+    if (
+      tab &&
+      [
+        'products',
+        'orders',
+        'customers',
+        'statistics',
+        'revenue',
+        'expenses',
+        'users',
+        'settings'
+      ].includes(tab)
+    ) {
+      setActiveTab(tab);
+    }
   }, []);
+
+  // Funkcija za promenu taba koja ažurira i URL
+  const changeTab = (tab: TabType) => {
+    setActiveTab(tab);
+
+    // Ažuriraj URL bez osvežavanja stranice
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', tab);
+    window.history.pushState({}, '', url);
+  };
 
   async function fetchAdminInfo() {
     try {
@@ -99,34 +127,32 @@ export default function AdminDashboard() {
       if (ordersError) throw ordersError;
 
       // Fetch total customers
-      const { count: customersCount, error: customersError } = await supabase
+      const { data: customersData, error: customersError } = await supabase
         .from('kupci')
-        .select('id', { count: 'exact' });
+        .select('id');
 
       if (customersError) throw customersError;
 
       // Fetch total products
-      const { count: productsCount, error: productsError } = await supabase
+      const { data: productsData, error: productsError } = await supabase
         .from('proizvodi')
-        .select('id', { count: 'exact' });
+        .select('id');
 
       if (productsError) throw productsError;
 
       // Calculate total revenue
-      const totalRevenue =
-        orders?.reduce((sum, order) => sum + (order.cena_ukupno || 0), 0) || 0;
+      const totalRevenue = orders
+        ? orders.reduce((sum, order) => sum + (order.cena_ukupno || 0), 0)
+        : 0;
 
       setStats({
-        totalOrders: orders?.length || 0,
-        totalCustomers: customersCount || 0,
+        totalOrders: orders ? orders.length : 0,
+        totalCustomers: customersData ? customersData.length : 0,
         totalRevenue,
-        totalProducts: productsCount || 0,
-        recentOrders: [],
-        topProducts: []
+        totalProducts: productsData ? productsData.length : 0
       });
     } catch (error) {
       console.error('Error fetching statistics:', error);
-      toast.error('Greška pri učitavanju statistike');
     } finally {
       setLoading(false);
     }
@@ -134,9 +160,9 @@ export default function AdminDashboard() {
 
   async function handleSignOut() {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      window.location.href = '/login';
+      await signOut();
+      toast.success('Uspešno ste se odjavili');
+      router.push('/');
     } catch (error) {
       console.error('Error signing out:', error);
       toast.error('Greška pri odjavljivanju');
@@ -166,7 +192,7 @@ export default function AdminDashboard() {
             <div className='space-y-6'>
               <button
                 onClick={() => {
-                  setActiveTab('products');
+                  changeTab('products');
                   setIsMobileMenuOpen(false);
                 }}
                 className={`flex items-center space-x-2 w-full px-4 py-2 rounded-lg ${
@@ -180,7 +206,7 @@ export default function AdminDashboard() {
               </button>
               <button
                 onClick={() => {
-                  setActiveTab('orders');
+                  changeTab('orders');
                   setIsMobileMenuOpen(false);
                 }}
                 className={`flex items-center space-x-2 w-full px-4 py-2 rounded-lg ${
@@ -194,7 +220,7 @@ export default function AdminDashboard() {
               </button>
               <button
                 onClick={() => {
-                  setActiveTab('customers');
+                  changeTab('customers');
                   setIsMobileMenuOpen(false);
                 }}
                 className={`flex items-center space-x-2 w-full px-4 py-2 rounded-lg ${
@@ -208,7 +234,7 @@ export default function AdminDashboard() {
               </button>
               <button
                 onClick={() => {
-                  setActiveTab('revenue');
+                  changeTab('revenue');
                   setIsMobileMenuOpen(false);
                 }}
                 className={`flex items-center space-x-2 w-full px-4 py-2 rounded-lg ${
@@ -222,7 +248,7 @@ export default function AdminDashboard() {
               </button>
               <button
                 onClick={() => {
-                  setActiveTab('expenses');
+                  changeTab('expenses');
                   setIsMobileMenuOpen(false);
                 }}
                 className={`flex items-center space-x-2 w-full px-4 py-2 rounded-lg ${
@@ -236,7 +262,7 @@ export default function AdminDashboard() {
               </button>
               <button
                 onClick={() => {
-                  setActiveTab('statistics');
+                  changeTab('statistics');
                   setIsMobileMenuOpen(false);
                 }}
                 className={`flex items-center space-x-2 w-full px-4 py-2 rounded-lg ${
@@ -247,6 +273,34 @@ export default function AdminDashboard() {
               >
                 <BarChart2 className='h-5 w-5' />
                 <span>Statistika</span>
+              </button>
+              <button
+                onClick={() => {
+                  changeTab('users');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex items-center space-x-2 w-full px-4 py-2 rounded-lg ${
+                  activeTab === 'users'
+                    ? 'bg-yellow-100 text-yellow-600'
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                <Users className='h-5 w-5' />
+                <span>Korisnici</span>
+              </button>
+              <button
+                onClick={() => {
+                  changeTab('settings');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex items-center space-x-2 w-full px-4 py-2 rounded-lg ${
+                  activeTab === 'settings'
+                    ? 'bg-yellow-100 text-yellow-600'
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                <Settings className='h-5 w-5' />
+                <span>Podešavanja</span>
               </button>
               <button
                 onClick={handleSignOut}
@@ -287,13 +341,22 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
-            <button
-              onClick={handleSignOut}
-              className='flex items-center space-x-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors'
-            >
-              <LogOut className='h-4 w-4' />
-              <span>Odjavi se</span>
-            </button>
+            <div className='flex items-center space-x-4'>
+              <button
+                onClick={() => router.push('/')}
+                className='flex items-center space-x-2 px-4 py-2 bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors'
+              >
+                <Home className='h-4 w-4' />
+                <span>Nazad na sajt</span>
+              </button>
+              <button
+                onClick={handleSignOut}
+                className='flex items-center space-x-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors'
+              >
+                <LogOut className='h-4 w-4' />
+                <span>Odjavi se</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -334,7 +397,7 @@ export default function AdminDashboard() {
           <div className='border-b border-gray-200'>
             <nav className='flex space-x-8 px-6' aria-label='Tabs'>
               <button
-                onClick={() => setActiveTab('products')}
+                onClick={() => changeTab('products')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'products'
                     ? 'border-yellow-500 text-yellow-600'
@@ -348,7 +411,7 @@ export default function AdminDashboard() {
               </button>
 
               <button
-                onClick={() => setActiveTab('orders')}
+                onClick={() => changeTab('orders')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'orders'
                     ? 'border-yellow-500 text-yellow-600'
@@ -362,7 +425,7 @@ export default function AdminDashboard() {
               </button>
 
               <button
-                onClick={() => setActiveTab('customers')}
+                onClick={() => changeTab('customers')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'customers'
                     ? 'border-yellow-500 text-yellow-600'
@@ -376,7 +439,7 @@ export default function AdminDashboard() {
               </button>
 
               <button
-                onClick={() => setActiveTab('revenue')}
+                onClick={() => changeTab('revenue')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'revenue'
                     ? 'border-yellow-500 text-yellow-600'
@@ -390,7 +453,7 @@ export default function AdminDashboard() {
               </button>
 
               <button
-                onClick={() => setActiveTab('expenses')}
+                onClick={() => changeTab('expenses')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'expenses'
                     ? 'border-yellow-500 text-yellow-600'
@@ -404,7 +467,7 @@ export default function AdminDashboard() {
               </button>
 
               <button
-                onClick={() => setActiveTab('statistics')}
+                onClick={() => changeTab('statistics')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'statistics'
                     ? 'border-yellow-500 text-yellow-600'
@@ -414,6 +477,34 @@ export default function AdminDashboard() {
                 <div className='flex items-center space-x-2'>
                   <BarChart2 className='h-5 w-5' />
                   <span>Statistika</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => changeTab('users')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'users'
+                    ? 'border-yellow-500 text-yellow-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } transition-colors`}
+              >
+                <div className='flex items-center space-x-2'>
+                  <Users className='h-5 w-5' />
+                  <span>Korisnici</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => changeTab('settings')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'settings'
+                    ? 'border-yellow-500 text-yellow-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } transition-colors`}
+              >
+                <div className='flex items-center space-x-2'>
+                  <Settings className='h-5 w-5' />
+                  <span>Podešavanja</span>
                 </div>
               </button>
             </nav>
@@ -427,6 +518,8 @@ export default function AdminDashboard() {
             {activeTab === 'revenue' && <RevenueTab />}
             {activeTab === 'expenses' && <ExpensesTab />}
             {activeTab === 'statistics' && <StatisticsTab />}
+            {activeTab === 'users' && <UsersTab />}
+            {activeTab === 'settings' && <SettingsTab />}
           </div>
         </div>
       </div>
@@ -450,35 +543,27 @@ function QuickStatCard({
   icon: Icon
 }: QuickStatCardProps) {
   return (
-    <div className='bg-white rounded-xl shadow-lg p-4 md:p-6'>
-      <div className='flex items-center justify-between'>
-        <div className='flex items-center space-x-4'>
-          <div
-            className={`p-3 rounded-full ${
-              trend === 'up'
-                ? 'bg-green-100 text-green-600'
-                : 'bg-red-100 text-red-600'
-            }`}
-          >
-            <Icon className='h-6 w-6' />
-          </div>
-          <div>
-            <p className='text-sm text-gray-500'>{title}</p>
-            <p className='text-lg md:text-2xl font-semibold'>{value}</p>
-          </div>
+    <div className='bg-white rounded-xl shadow-lg p-6'>
+      <div className='flex justify-between items-start'>
+        <div>
+          <p className='text-sm font-medium text-gray-500'>{title}</p>
+          <p className='mt-2 text-xl font-semibold'>{value}</p>
         </div>
-        <div
-          className={`flex items-center space-x-1 ${
+        <div className='bg-yellow-50 p-3 rounded-full'>
+          <Icon className='h-6 w-6 text-yellow-600' />
+        </div>
+      </div>
+      <div className='mt-4 flex items-center'>
+        <span
+          className={`text-sm font-medium ${
             trend === 'up' ? 'text-green-600' : 'text-red-600'
           }`}
         >
-          {trend === 'up' ? (
-            <ArrowUpRight className='h-4 w-4' />
-          ) : (
-            <ArrowDownRight className='h-4 w-4' />
-          )}
-          <span className='text-sm font-medium'>{change}</span>
-        </div>
+          {change}
+        </span>
+        <span className='text-xs text-gray-500 ml-2'>
+          u odnosu na prošli mesec
+        </span>
       </div>
     </div>
   );

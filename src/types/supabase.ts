@@ -10,6 +10,7 @@ export type Database = {
           adresa: string;
           mesto: string;
           id_post: string;
+          broj_telefona: string | null;
           kreirano: string;
         };
         Insert: Omit<
@@ -42,6 +43,8 @@ export type Database = {
           nabavna_cena: number;
           id_kategorije: string;
           kreirano: string;
+          novi_proizvod: boolean;
+          najprodavaniji_proizvod: boolean;
         };
         Insert: Omit<
           Database['public']['Tables']['proizvodi']['Row'],
@@ -132,6 +135,8 @@ export type Database = {
           kreirano: string;
           naziv_kategorije: string;
           glavna_slika: string | null;
+          novi_proizvod: boolean;
+          najprodavaniji_proizvod: boolean;
         };
       };
       v_porudzbine_pregled: {

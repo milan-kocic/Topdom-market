@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { supabase } from '../supabase/client';
 import { Porudzbina, StavkaPorudzbine, PorudzbinaPregled } from '../../types';
 
 export async function getPorudzbine(): Promise<PorudzbinaPregled[]> {

@@ -1,5 +1,5 @@
-import { supabase } from '../supabase';
-import { Proizvod, ProizvodDetalji } from '../../types';
+import { supabase } from '../supabase/client';
+import { Proizvod, ProizvodDetalji } from '@/types';
 
 export async function getProizvodi(): Promise<ProizvodDetalji[]> {
   const { data, error } = await supabase
@@ -7,6 +7,53 @@ export async function getProizvodi(): Promise<ProizvodDetalji[]> {
     .select('*');
 
   if (error) throw error;
+  return data || [];
+}
+
+export async function getNoviProizvodi(): Promise<ProizvodDetalji[]> {
+  console.log('getNoviProizvodi: Započinjem dohvatanje...');
+
+  const { data, error } = await supabase
+    .from('v_proizvodi_detalji')
+    .select('*')
+    .eq('novi_proizvod', true);
+
+  console.log('getNoviProizvodi: Supabase odgovor:', { data, error });
+
+  if (error) {
+    console.error('getNoviProizvodi: Greška:', error);
+    throw error;
+  }
+
+  console.log('getNoviProizvodi: Uspešno dohvaćeni proizvodi:', data);
+  return data || [];
+}
+
+export async function getNajprodavanijiProizvodi(): Promise<ProizvodDetalji[]> {
+  const { data, error } = await supabase
+    .from('v_proizvodi_detalji')
+    .select('*')
+    .eq('najprodavaniji_proizvod', true);
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getIznenadjenja(): Promise<ProizvodDetalji[]> {
+  console.log('getIznenadjenja: Započinjem dohvatanje...');
+
+  const { data, error } = await supabase
+    .from('v_proizvodi_detalji')
+    .select('*')
+    .eq('iznenadjenje', true)
+    .limit(4);
+
+  if (error) {
+    console.error('getIznenadjenja: Greška:', error);
+    throw error;
+  }
+
+  console.log('getIznenadjenja: Uspešno dohvaćeni proizvodi:', data);
   return data || [];
 }
 

@@ -5,8 +5,22 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import type { Database } from '@/lib/types/database.types';
 import ProductCard from './ProductCard';
+import styles from './ProductCarousel.module.css';
 
-type Product = Database['public']['Tables']['proizvodi']['Row'];
+type Product = {
+  id: string;
+  naziv_proizvoda: string;
+  opis: string;
+  cena: number;
+  glavna_slika: string;
+  novi_proizvod: boolean;
+  najprodavaniji_proizvod: boolean;
+  id_kategorije: string;
+  kreirano: string;
+  sku: string | null;
+  nabavna_cena: number | null;
+  naziv_kategorije: string;
+};
 
 export default function ProductCarousel() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -18,7 +32,7 @@ export default function ProductCarousel() {
     async function fetchProducts() {
       try {
         const { data, error } = await supabase
-          .from('proizvodi')
+          .from('v_proizvodi_detalji')
           .select('*')
           .order('kreirano', { ascending: false });
 
@@ -89,6 +103,25 @@ export default function ProductCarousel() {
     return () => clearInterval(timer);
   }, [slideNext, products.length]);
 
+  const translateX = -(currentIndex + 4) * 25; // Add offset for the prepended items
+
+  // Dinamički generišemo CSS klasu za transformaciju
+  useEffect(() => {
+    if (isLoading) return; // Preskačemo kreiranje stila ako se još uvek učitava
+
+    const styleElement = document.createElement('style');
+    styleElement.innerHTML = `
+      .dynamic-translate {
+        transform: translateX(${translateX}%) !important;
+      }
+    `;
+    document.head.appendChild(styleElement);
+
+    return () => {
+      document.head.removeChild(styleElement);
+    };
+  }, [translateX, isLoading]);
+
   if (isLoading) {
     return (
       <div className='grid grid-cols-4 gap-8'>
@@ -108,25 +141,17 @@ export default function ProductCarousel() {
     );
   }
 
-  const translateX = -(currentIndex + 4) * 25; // Add offset for the prepended items
-
   return (
     <div className='relative'>
       <div className='overflow-hidden'>
-        <div
-          className='flex transition-transform duration-300 ease-in-out'
-          style={{
-            transform: `translateX(${translateX}%)`
-          }}
-        >
+        <div className={`${styles.carouselTrack} dynamic-translate`}>
           {extendedProducts.map((product, index) => (
             <div
               key={`${product.id}-${index}`}
-              className='w-full flex-shrink-0 px-4'
-              style={{ width: '25%' }}
+              className={`flex-shrink-0 px-4 ${styles.carouselItem}`}
             >
               <ProductCard
-                image={product.img_url}
+                image={product.glavna_slika}
                 title={product.naziv_proizvoda}
                 price={product.cena.toString()}
                 oldPrice={(product.cena * 1.2).toFixed(0)}
@@ -162,6 +187,7 @@ export default function ProductCarousel() {
         {products.map((_, i) => (
           <button
             key={i}
+            aria-label={`Prikaži slajd ${i + 1}`}
             onClick={() => {
               if (!isAnimating) {
                 setIsAnimating(true);
